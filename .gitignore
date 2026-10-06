@@ -1,0 +1,26 @@
+# Godot generated cache and local export configuration
+.godot/
+export_credentials.cfg
+*.tmp
+*.log
+# Local runtime and build products
+godot.windows.editor.double.x86_64.exe/
+dist/
+media_work/
+发布验证/
+开发验证/
+旧版_v1/
+# Generated root screenshots and benchmarks
+/*.png
+/*.json
+# Local inspection scripts
+game/inspect_v2.gd*
+# Operating system files
+Thumbs.db
+.DS_Store
+
+# Historical concept retained locally
+/*设计 v0.md
+
+# Video delivered as a release asset
+/media/
