@@ -34,6 +34,10 @@ var hover = Vector3(9999,9999,9999)
 var stroke_last = Vector3(9999,9999,9999)
 var stroke_height: float = 0
 var brush_timer: float = 0
+var raise_active:bool=false
+var raise_screen=Vector2(-9999,-9999)
+var raise_anchor=Vector2.ZERO
+var raise_top:float=0
 var pending_surface: Dictionary = {}
 var speed: int = 1
 var accumulator: float = 0
@@ -185,12 +189,14 @@ func show_creation():
 	content.add_child(label("塑形力度",14))
 	var strength = HSlider.new(); strength.min_value=0.25; strength.max_value=5; strength.step=0.25; strength.value=brush_strength
 	strength.custom_minimum_size.y=28; strength.value_changed.connect(func(v): brush_strength=v); content.add_child(strength)
+	var edges=CheckButton.new();edges.text="自然笔触 · 边缘带轻微起伏";edges.button_pressed=visual.natural_edges
+	edges.toggled.connect(func(v):visual.natural_edges=v;save_settings());content.add_child(edges)
 	content.add_child(label("笔刷范围 3–48 米 · 水源最多 32 处\n右键清除植物或水源 · Shift 固定塑形/开凿高度\nCtrl Z 撤销 · Ctrl Y 重做（最近 6 次编辑）\n地形范围 1024×1024 米，最高可塑造至约 950 米。\n生态仍采样最高地表，悬空岛下方和洞内无独立生态。",14))
 	var row = HBoxContainer.new(); content.add_child(row)
 	row.add_child(button("撤销",undo_edit)); row.add_child(button("重做",redo_edit)); row.add_child(button("开始创造",close_popup))
 
 func remember_edit():
-	finish_simulation(); update_surface(); visual.capture_edits()
+	finish_simulation(); update_surface(true); visual.capture_edits()
 	undo_history.append(model.snapshot())
 	if undo_history.size()>6: undo_history.pop_front()
 	redo_history.clear()
@@ -203,12 +209,12 @@ func restore_edit(state: Dictionary):
 
 func undo_edit():
 	if undo_history.is_empty(): toast("还没有可撤销的编辑。"); return
-	finish_simulation(); update_surface(); visual.capture_edits(); redo_history.append(model.snapshot())
+	finish_simulation(); update_surface(true); visual.capture_edits(); redo_history.append(model.snapshot())
 	restore_edit(undo_history.pop_back()); toast("已撤销；Ctrl Y 可重做。")
 
 func redo_edit():
 	if redo_history.is_empty(): toast("没有可重做的编辑。"); return
-	finish_simulation(); update_surface(); visual.capture_edits(); undo_history.append(model.snapshot())
+	finish_simulation(); update_surface(true); visual.capture_edits(); undo_history.append(model.snapshot())
 	restore_edit(redo_history.pop_back()); toast("已重做。")
 
 func support_texture() -> Texture2D:
@@ -328,6 +334,7 @@ func continue_game():
 
 func select_tool(k: int):
 	selected_tool = k; drawing = 0; stroke_last = Vector3(9999,9999,9999)
+	raise_active=false
 	for j in tool_buttons.size(): tool_buttons[j].add_theme_stylebox_override("normal",style(Color("bfd9ca") if j==k else Color(0.95,0.97,0.93,0.0),14,12))
 	update_tool_description()
 	inspector = k==5
@@ -372,6 +379,7 @@ func set_panorama(value: bool):
 
 func advance_world(dt: float):
 	accumulator=minf(accumulator+dt*speed,1.5); render_timer+=dt
+	if drawing!=0 or not pending_surface.is_empty():return
 	if (accumulator>=0.25 or (speed==0 and render_timer>=1.5)) and sim_thread==null: start_simulation()
 
 func open_popup(title_text: String, width: float = 420):
@@ -445,6 +453,7 @@ func load_settings():
 	if cfg.load("user://settings.cfg")==OK:
 		AudioServer.set_bus_volume_db(0,clampf(cfg.get_value("sound","volume",-8.0),-40,0))
 		sound.enabled_music = cfg.get_value("sound","music",true)
+		visual.natural_edges=cfg.get_value("editing","natural_edges",true)
 		for key in ["music_volume","ambience_volume","effects_volume"]: sound.set(key,clampf(cfg.get_value("sound",key,sound.get(key)),0,1))
 		AudioServer.set_bus_mute(0,AudioServer.get_bus_volume_db(0)<=-40)
 
@@ -454,6 +463,7 @@ func save_settings():
 	cfg.set_value("sound","volume",AudioServer.get_bus_volume_db(0))
 	cfg.set_value("sound","music",sound.enabled_music)
 	for key in ["music_volume","ambience_volume","effects_volume"]: cfg.set_value("sound",key,sound.get(key))
+	cfg.set_value("editing","natural_edges",visual.natural_edges)
 	cfg.save("user://settings.cfg")
 
 func show_help():
@@ -508,7 +518,7 @@ func show_ecology():
 func archive_current_world():
 	var world:Dictionary;var viewpoint:Dictionary
 	if started:
-		finish_simulation();update_surface();visual.capture_edits()
+		finish_simulation();update_surface(true);visual.capture_edits()
 		world=model.snapshot();viewpoint=resume_camera if home_visible and not resume_camera.is_empty() else camera_snapshot()
 	else:
 		var data=read_bundle()
@@ -566,7 +576,7 @@ func toast(text_value: String, seconds: float = 4):
 
 func _input(event):
 	if event is InputEventMouseButton and not event.pressed:
-		if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]: drawing = 0; stroke_last = Vector3(9999,9999,9999)
+		if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]: drawing = 0; stroke_last = Vector3(9999,9999,9999);raise_active=false
 		if event.button_index==MOUSE_BUTTON_MIDDLE: orbiting = false; panning = false
 
 func _unhandled_input(event):
@@ -615,7 +625,7 @@ func _unhandled_input(event):
 		elif event.pressed and event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]:
 			if selected_tool<=2:
 				drawing = -1 if event.button_index==MOUSE_BUTTON_RIGHT else 1
-				remember_edit(); hover = visual.pick_plane(event.position,placement_height) if stamp_mode and selected_tool==0 else visual.pick(event.position); stroke_height = hover.y; brush_timer = 0
+				remember_edit();raise_active=false; hover = visual.pick_plane(event.position,placement_height) if stamp_mode and selected_tool==0 else visual.pick(event.position); stroke_height = hover.y; brush_timer = 0
 				apply_brush()
 			elif event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT] and selected_tool in [3,4]:
 				hover = visual.pick(event.position); remember_edit(); use_tool(event.button_index==MOUSE_BUTTON_RIGHT)
@@ -624,22 +634,30 @@ func _unhandled_input(event):
 		if orbiting: visual.orbit(event.relative)
 		if panning: visual.pan(event.relative)
 
-func apply_brush():
+func apply_brush(step_seconds:float=0.05,pointer:Vector2=Vector2(-9999,-9999)):
 	if hover.x>9000: return
 	if selected_tool==4:
 		if stroke_last.x<9000 and stroke_last.distance_to(hover)<maxf(3,radius*0.35): return
 		use_tool(drawing<0); stroke_last=hover; return
 	var point = hover
+	var raising=selected_tool==0 and drawing>0 and not stamp_mode and not Input.is_key_pressed(KEY_SHIFT)
+	if raising:
+		var screen=get_viewport().get_mouse_position() if pointer.x<-9000 else pointer
+		if not raise_active or screen.distance_to(raise_screen)>2.0:
+			raise_anchor=Vector2(point.x,point.z);raise_top=maxf(point.y,radius*.4 if point.y<.3 else point.y);raise_screen=screen;raise_active=true
+		point=Vector3(raise_anchor.x,raise_top,raise_anchor.y)
+		raise_top+=24.0*brush_strength*step_seconds
 	if selected_tool<=1 and Input.is_key_pressed(KEY_SHIFT): point.y = stroke_height
 	if stamp_mode and selected_tool==0: point.y = placement_height
 	if stroke_last.x<9000 and stroke_last.distance_to(point)>radius*0.4:
 		var count = mini(3,int(stroke_last.distance_to(point)/(radius*0.4)))
 		for k in range(1,count+1): visual.edit(stroke_last.lerp(point,float(k)/(count+1)),radius,selected_tool,drawing<0,brush_strength,stamp_mode)
-	visual.edit(point,radius,selected_tool,drawing<0,brush_strength,stamp_mode); stroke_last = point; edit_revision += 1
+	visual.edit(point,radius,selected_tool,drawing<0,brush_strength,stamp_mode,step_seconds); stroke_last = point; edit_revision += 1
 	sound.effect("smooth" if selected_tool==2 else "cut" if selected_tool==1 or drawing<0 else "earth")
 	var ci = model.index_at(Vector2(point.x,point.z)); var r = int(ceil(radius/model.CELL))+1
 	for z in range(maxi(1,ci/model.N-r),mini(model.N-1,ci/model.N+r+1)):
-		for x in range(maxi(1,ci%model.N-r),mini(model.N-1,ci%model.N+r+1)): pending_surface[x+z*model.N] = true
+		for x in range(maxi(1,ci%model.N-r),mini(model.N-1,ci%model.N+r+1)):
+			var i=x+z*model.N;pending_surface[i]=maxf(pending_surface.get(i,-48.0),maxf(model.heights[i]+64,point.y+radius+8))
 
 func use_tool(remove: bool = false):
 	if hover.x>9000: return
@@ -665,13 +683,18 @@ func use_tool(remove: bool = false):
 		sound.effect("seed")
 	edit_revision += 1; render_timer = 2
 
-func update_surface():
+func update_surface(flush:bool=false):
 	if pending_surface.is_empty(): return
 	var tool = visual.terrain.get_voxel_tool()
-	for i in pending_surface:
-		var p = model.pos(i); var hit = tool.raycast(Vector3(p.x,visual.TOP-1,p.y),Vector3.DOWN,visual.TOP-visual.BOTTOM-2)
-		model.heights[i] = visual.TOP-1-hit.distance if hit!=null else -48.0
-	pending_surface = {}; model.refresh_fields(); edit_revision += 1; render_timer = 2
+	var started_at=Time.get_ticks_usec()
+	for i in pending_surface.keys():
+		var p = model.pos(i);var upper=minf(visual.TOP-1,pending_surface[i])
+		var hit = tool.raycast(Vector3(p.x,upper,p.y),Vector3.DOWN,upper-visual.BOTTOM-1)
+		model.heights[i] = upper-hit.distance if hit!=null else -48.0
+		pending_surface.erase(i)
+		if not flush and Time.get_ticks_usec()-started_at>=2000:break
+	edit_revision += 1
+	if pending_surface.is_empty():model.refresh_fields();render_timer=2
 
 func _process(dt: float):
 	if model==null: return
@@ -686,7 +709,7 @@ func _process(dt: float):
 				stress_timer = 0; var p = Vector2(sin(now/1000000.0)*60,cos(now/1000000.0)*60)
 				visual.edit(Vector3(p.x,model.height_at(p),p.y),10,0); edit_revision += 1
 	poll_simulation()
-	visual.animate(dt,drawing==0)
+	visual.animate(dt,drawing==0 and pending_surface.is_empty())
 	if panorama:
 		if not orbiting and not panning: visual.target_yaw+=dt*0.035
 		visual.set_cursor(Vector3(9999,9999,9999),radius,false)
@@ -701,12 +724,16 @@ func _process(dt: float):
 	var blocked = get_viewport().gui_get_hovered_control()!=null
 	hover = Vector3(9999,9999,9999) if blocked else visual.pick(get_viewport().get_mouse_position())
 	if stamp_mode and selected_tool==0 and not blocked: hover=visual.pick_plane(get_viewport().get_mouse_position(),placement_height)
-	visual.set_cursor(hover,minf(radius,14) if selected_tool==2 else radius,selected_tool==1 or (selected_tool==0 and drawing<0),stamp_mode and selected_tool==0,selected_tool<=2)
+	if raise_active and drawing>0 and selected_tool==0 and not stamp_mode and get_viewport().get_mouse_position().distance_to(raise_screen)<=2.0:
+		hover=Vector3(raise_anchor.x,raise_top,raise_anchor.y)
+	visual.set_cursor(hover,minf(radius,14) if selected_tool==2 else radius,selected_tool==1 or (selected_tool==0 and drawing<0),stamp_mode and selected_tool==0,selected_tool<=2,24.0*brush_strength*.05,selected_tool)
 	visual.set_source_focus(selected_tool==3,hover)
 	if drawing!=0 and not blocked:
 		brush_timer += dt
-		if brush_timer>=0.033: brush_timer = 0; apply_brush()
+		if brush_timer>=0.05:
+			var step_seconds=minf(brush_timer,.20);brush_timer=0;apply_brush(step_seconds)
 	elif drawing==0: update_surface()
+	if drawing==0 and pending_surface.is_empty():visual.cache_edit_blocks()
 	if Input.is_key_pressed(KEY_W): visual.pan(Vector2(0,-dt*150))
 	if Input.is_key_pressed(KEY_S): visual.pan(Vector2(0,dt*150))
 	if Input.is_key_pressed(KEY_A): visual.pan(Vector2(-dt*150,0))
@@ -794,7 +821,7 @@ func read_bundle() -> Dictionary:
 
 func save_game():
 	if not started: return
-	update_surface(); visual.capture_edits()
+	update_surface(true); visual.capture_edits()
 	write_bundle({"world":model.snapshot(),"records":records,"camera":resume_camera if home_visible and not resume_camera.is_empty() else camera_snapshot()})
 
 func write_bundle(data:Dictionary):

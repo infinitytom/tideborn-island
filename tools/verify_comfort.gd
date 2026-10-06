@@ -21,15 +21,15 @@ func run():
 	game.speed=0;game.set_panorama(true)
 	var v=game.visual
 	game.model.prepare_render_frame();v.queue_render(game.model.render_frame)
-	for i in 16:v.apply_render_stage()
+	while v.render_stage>=0:v.apply_render_stage()
 	for i in 90:await process_frame
 	var p=Vector2(45,70);var initial=surface(p);v.capture_edits();var state=game.model.snapshot()
-	for i in 30:v.edit(Vector3(p.x,surface(p),p.y),12,0,false,1.0/3.0)
+	for i in 30:v.terrain.get_voxel_tool().grow_sphere(Vector3(p.x,surface(p),p.y),12,2.4)
 	var old_rise=surface(p)-initial
 	game.restore_edit(state)
 	game.radius=12;game.selected_tool=0;game.drawing=1;game.brush_strength=1;game.stamp_mode=false
 	for i in 30:
-		game.hover=Vector3(p.x,surface(p),p.y);game.apply_brush()
+		game.hover=Vector3(p.x,surface(p),p.y);game.apply_brush(.05,Vector2.ZERO)
 	var new_rise=surface(p)-initial;game.drawing=0
 	var prior=game.sound.effect_index
 	game.sound.last_effect=-1000
@@ -43,9 +43,9 @@ func run():
 	var moon_ok=v.moon.light_energy>.6 and v.moon_disc.visible
 	# Reconstruct v0.3.2 illumination for a same-camera comparison.
 	v.moon.light_energy=0;v.moon_disc.visible=false
-	v.environment.environment.ambient_light_energy=.22;v.sun.light_energy=.12
+	v.environment.environment.ambient_light_energy=.22;v.sun.light_energy=.12;v.sun.visible=true
 	var old_img=await shot("night-previous");var old_mean=image_mean(old_img)
-	var rise_ok=new_rise>old_rise*1.8 and new_rise>2
+	var rise_ok=new_rise>=30 and new_rise>old_rise
 	var light_ok=new_mean>old_mean*1.15
 	v.target_pitch=.15;v.target_yaw=deg_to_rad(v.moon.rotation_degrees.y)-PI
 	for i in 120:v.animate(1.0/30);await process_frame

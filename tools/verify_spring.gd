@@ -17,12 +17,12 @@ func run():
 	game.set_process(false); game.speed=0; game.set_panorama(true)
 	game.visual.preview_clock=40
 	game.model.prepare_render_frame(); game.visual.queue_render(game.model.render_frame)
-	for i in 16: game.visual.apply_render_stage()
+	while game.visual.render_stage>=0: game.visual.apply_render_stage()
 	for i in 90: await process_frame
 	var p=Vector2(45,70); var h=game.model.height_at(p)
 	game.model.paint_plants(p,70,-1)
 	game.model.prepare_render_frame(); game.visual.queue_render(game.model.render_frame)
-	for i in 16: game.visual.apply_render_stage()
+	while game.visual.render_stage>=0: game.visual.apply_render_stage()
 	var v=game.visual
 	v.target_focus=Vector3(p.x,h,p.y); v.target_distance=45; v.target_pitch=1.0; v.target_yaw=.4
 	game.select_tool(3); game.hover=Vector3(p.x,h,p.y)

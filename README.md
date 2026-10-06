@@ -4,9 +4,9 @@
 
 一个可以造山、填海、挖洞、种森林，也可以静静看晨昏与四季的三维生态沙盘。
 
-[下载 Windows 版](https://github.com/infinitytom/tideborn-island/releases/latest) · [观看宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.2/IslandStack-Trailer.mp4) · [下载封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.2/IslandStack-Cover.png) · [完整操作说明](使用说明.md)
+[下载 Windows 版](https://github.com/infinitytom/tideborn-island/releases/latest) · [观看宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Trailer.mp4) · [下载封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Cover.png) · [完整操作说明](使用说明.md)
 
-[![宣传片：小岛叠叠乐](docs/images/trailer-cover.jpg)](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.2/IslandStack-Trailer.mp4)
+[![宣传片：小岛叠叠乐](docs/images/trailer-cover.jpg)](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Trailer.mp4)
 
 ![新版开始界面](docs/images/home.png)
 
@@ -14,7 +14,7 @@
 
 ## 开始游玩
 
-1. 下载 Releases 中的 **IslandStack-v0.3.3-Windows-x64.zip**。
+1. 下载 Releases 中的 **IslandStack-v0.3.4-Windows-x64.zip**。
 2. 完整解压，双击 **IslandStack.exe** 或「启动游戏.cmd」。
 3. 点击「认识这个世界」了解操作；「全景欣赏」可以直接看看小岛。
 
@@ -25,6 +25,7 @@
 - 真正的三维体素地形：填海、造山、开洞、隧道与悬挑。
 - 范围 3–48 米的笔刷、可调塑形力度、指定高度悬空塑形，以及撤销与重做。
 - 悬停显示绿色添加、红色开凿的半透明影响范围；抬升更明显，夜间有月光照亮施工地形。
+- 按住鼠标时在原落点向上叠加，按实际时间与力度抬升；「自然笔触」给建造和开凿边缘添加轻微起伏，可在创造面板关闭。
 - 自然播种，让环境筛选群落；自由创造可直接种植并保留 12 种植物。
 - 水源、土壤湿度、地表水与近海生态相互联系。泉眼贴合地形，以细涟漪融入景物；使用水源工具靠近时显示边缘提示，右键可移除。
 - 春夏绿意、秋季金红叶片、冬季雪地与湖冰，晨昏连续渐变。

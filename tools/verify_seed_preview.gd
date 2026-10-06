@@ -40,7 +40,7 @@ func run():
 		ui_ok=ui_ok and game.model.world_seed==seed_value
 		game.set_panorama(true)
 		var v=game.visual;v.preview_clock=40;v.daylight=1
-		for i in 16:v.apply_render_stage()
+		while v.render_stage>=0:v.apply_render_stage()
 		v.target_focus=Vector3(0,30,0);v.target_distance=650;v.target_pitch=.85;v.target_yaw=.55
 		for i in 120:v.animate(1.0/30);await process_frame
 		await shot("seed-"+str(seed_value))
@@ -50,7 +50,7 @@ func run():
 		if game.model.heights[i]>game.model.heights[highest]:highest=i
 	var sample=game.model.pos(highest)
 	game.model.paint_plants(sample,55,-1);game.model.prepare_render_frame();v.queue_render(game.model.render_frame)
-	for i in 16:v.apply_render_stage()
+	while v.render_stage>=0:v.apply_render_stage()
 	var hit=v.terrain.get_voxel_tool().raycast(Vector3(sample.x,959,sample.y),Vector3.DOWN,1022)
 	var p=Vector3(sample.x,959-hit.distance,sample.y)
 	print("PREVIEW_POINT ",p," model_height=",game.model.height_at(sample))

@@ -4,7 +4,7 @@ var output_dir:String
 func _initialize(): call_deferred("run")
 func upload():
 	game.model.prepare_render_frame(); game.visual.queue_render(game.model.render_frame)
-	for i in 16: game.visual.apply_render_stage()
+	while game.visual.render_stage>=0: game.visual.apply_render_stage()
 func pose(p:Vector3,d:float,pitch:float,yaw:float):
 	var v=game.visual
 	v.focus=p;v.target_focus=p;v.distance=d;v.target_distance=d;v.pitch=pitch;v.target_pitch=pitch;v.yaw=yaw;v.target_yaw=yaw

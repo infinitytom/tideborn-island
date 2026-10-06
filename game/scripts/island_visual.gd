@@ -19,6 +19,9 @@ var plant_nodes: Array = []
 var props: Node3D
 var source_markers: Node3D
 var source_signature: String = ""
+var source_epoch:int=0
+var source_versions:Dictionary={}
+var source_work:Array=[]
 var flying: Array = []
 var walkers: Array = []
 var clouds: MultiMeshInstance3D
@@ -26,6 +29,13 @@ var rain: MultiMeshInstance3D
 var cursor: MeshInstance3D
 var brush_ball: MeshInstance3D
 var dirty_blocks: Dictionary = {}
+var uncaptured_blocks: Dictionary = {}
+var changed_plant_columns: Dictionary = {}
+var plant_column_tops: Dictionary = {}
+var plant_work=PackedFloat32Array()
+var plant_work_index:int=0
+var plant_work_count:int=0
+var plant_work_stage:int=-1
 var plant_ground_cache: Dictionary = {}
 var edited_plant_columns: Dictionary = {}
 var plant_ground_revision: int = -1
@@ -38,6 +48,8 @@ var target_pitch: float = 0.62
 var target_distance: float = 620
 var target_focus = Vector3(0,25,0)
 var phase: float = 0
+var natural_edges:bool=true
+var edit_serial:int=0
 var night: bool = false
 var render_pending: Dictionary = {}
 var render_stage: int = -1
@@ -144,6 +156,10 @@ func setup(m):
 func rebuild_terrain():
 	if is_instance_valid(terrain): terrain.free()
 	dirty_blocks = {}
+	uncaptured_blocks.clear();changed_plant_columns.clear();plant_column_tops.clear()
+	source_epoch+=1;source_versions.clear();source_work.clear();source_signature=""
+	plant_ground_cache.clear();plant_ground_revision=-1;plant_work_stage=-1
+	edit_serial=0
 	terrain = VoxelLodTerrain.new(); terrain.name = "VolumetricIsland"
 	terrain.voxel_bounds = AABB(Vector3(-512,BOTTOM,-512),Vector3(1024,TOP-BOTTOM,1024))
 	terrain.lod_count = 6; terrain.lod_distance = 48; terrain.secondary_lod_distance = 64
@@ -183,15 +199,16 @@ func pick_plane(screen: Vector2, altitude: float) -> Vector3:
 	if absf(p.x)>490 or absf(p.z)>490: return Vector3(9999,9999,9999)
 	return p
 
-func brush_center(p:Vector3,radius:float,remove:bool,stamp:bool=false) -> Vector3:
+func brush_center(p:Vector3,radius:float,remove:bool,stamp:bool=false,raise_amount:float=1.2) -> Vector3:
 	if remove:return p-last_normal*radius*0.55
 	if not stamp and p.y<0.3:return Vector3(p.x,-radius*0.6,p.z)
+	if not stamp:return p+Vector3.UP*(raise_amount-radius)
 	return p
 
-func edit(p: Vector3, radius: float, tool_kind: int, remove: bool = false, strength: float = 1.0, stamp: bool = false) -> bool:
+func edit(p: Vector3, radius: float, tool_kind: int, remove: bool = false, strength: float = 1.0, stamp: bool = false,step_seconds:float=0.05) -> bool:
 	if tool_kind==2:radius=minf(radius,14)
 	if absf(p.x)+radius>504 or absf(p.z)+radius>504 or p.y+radius>TOP-8 or p.y-radius<BOTTOM+8: return false
-	var center = p if tool_kind==2 else brush_center(p,radius,remove or tool_kind==1,stamp)
+	var center = p if tool_kind==2 else brush_center(p,radius,remove or tool_kind==1,stamp,24.0*strength*step_seconds)
 	var tool = terrain.get_voxel_tool(); tool.channel = VoxelBuffer.CHANNEL_SDF
 	if tool_kind==0 and not remove:
 		if stamp:
@@ -199,20 +216,39 @@ func edit(p: Vector3, radius: float, tool_kind: int, remove: bool = false, stren
 		elif p.y<0.3:
 			tool.mode = VoxelTool.MODE_ADD; tool.sdf_strength = 1.0
 			tool.do_sphere(center,radius)
-		else: tool.grow_sphere(p,radius,2.4*strength)
+		else:
+			tool.mode=VoxelTool.MODE_ADD;tool.sdf_strength=1.0;tool.do_sphere(center,radius)
 	elif tool_kind==2:
 		tool.smooth_sphere(p,minf(radius,14),1)
 	else:
 		tool.mode = VoxelTool.MODE_REMOVE; tool.sdf_strength = 1
 		tool.do_sphere(center,radius)
-	var low = Vector3i((center-Vector3.ONE*(radius+3))/32.0)
-	var high = Vector3i((center+Vector3.ONE*(radius+3))/32.0)
+	if natural_edges and tool_kind!=2:
+		# Small overlapping dabs soften the perfect sphere into a gentle brush edge.
+		edit_serial+=1
+		for j in 2:
+			var salt=edit_serial*2+j;var key=int(center.x*11+center.y*17+center.z*23)
+			var angle=model.hash01(key,91+salt)*TAU
+			var vertical=.968 if tool_kind==0 and not remove and not stamp else model.hash01(key,193+salt)*1.6-.8
+			var horizontal=sqrt(maxf(0,1-vertical*vertical))
+			var direction=Vector3(cos(angle)*horizontal,vertical,sin(angle)*horizontal)
+			tool.do_sphere(center+direction*radius*.95,radius*(.08+model.hash01(key,271+salt)*.02))
+	var affected_radius=radius*1.06 if natural_edges and tool_kind!=2 else radius
+	for source in model.springs:
+		var source_pos=Vector2(source.x,source.z)
+		if source_pos.distance_to(Vector2(center.x,center.z))<affected_radius+4:
+			source_versions[source_pos]=source_versions.get(source_pos,0)+1
+	var low = Vector3i((center-Vector3.ONE*(affected_radius+3))/32.0)
+	var high = Vector3i((center+Vector3.ONE*(affected_radius+3))/32.0)
 	# Floor is required at negative coordinates, not integer truncation.
-	low = Vector3i(floor((center.x-radius-3)/32),floor((center.y-radius-3)/32),floor((center.z-radius-3)/32))
-	high = Vector3i(floor((center.x+radius+3)/32),floor((center.y+radius+3)/32),floor((center.z+radius+3)/32))
+	low = Vector3i(floor((center.x-affected_radius-3)/32),floor((center.y-affected_radius-3)/32),floor((center.z-affected_radius-3)/32))
+	high = Vector3i(floor((center.x+affected_radius+3)/32),floor((center.y+affected_radius+3)/32),floor((center.z+affected_radius+3)/32))
 	for z in range(low.z,high.z+1):
 		for x in range(low.x,high.x+1):
-			for y in range(low.y,high.y+1): dirty_blocks[Vector3i(x,y,z)*32] = true
+			var column=Vector2i(x,z);changed_plant_columns[column]=true
+			plant_column_tops[column]=maxf(plant_column_tops.get(column,-48.0),center.y+affected_radius+8)
+			for y in range(low.y,high.y+1):
+				var origin=Vector3i(x,y,z)*32;dirty_blocks[origin]=true;uncaptured_blocks[origin]=true
 	terrain_revision += 1
 	return true
 
@@ -228,14 +264,21 @@ func sync_surface(p: Vector2, radius: float):
 	model.refresh_fields()
 
 func capture_edits() -> Dictionary:
+	cache_edit_blocks(-1)
+	return model.terrain_blocks
+
+func cache_edit_blocks(budget_usec:int=2000):
+	if uncaptured_blocks.is_empty():return
 	var blocks = model.terrain_blocks.duplicate()
 	var tool = terrain.get_voxel_tool()
-	for origin in dirty_blocks:
+	var started_at=Time.get_ticks_usec()
+	for origin in uncaptured_blocks.keys():
 		var buffer = VoxelBuffer.new(); buffer.create(32,32,32)
 		tool.copy(origin,buffer,VoxelBuffer.CHANNEL_SDF_BIT,false)
 		blocks[origin] = buffer.get_channel_as_byte_array(VoxelBuffer.CHANNEL_SDF)
+		uncaptured_blocks.erase(origin)
+		if budget_usec>0 and Time.get_ticks_usec()-started_at>=budget_usec:break
 	model.terrain_blocks = blocks
-	return blocks
 
 func update_camera(dt: float):
 	var t = 1.0-exp(-dt*16.0)
@@ -253,23 +296,26 @@ func pan(delta: Vector2):
 	target_focus += (-right*delta.x+forward*delta.y)*target_distance*0.0014
 	target_focus.x = clampf(target_focus.x,-460,460); target_focus.z = clampf(target_focus.z,-460,460)
 
-func set_cursor(p: Vector3, radius: float, excavation: bool, stamp:bool=false, terrain_preview:bool=true):
+func set_cursor(p: Vector3, radius: float, excavation: bool, stamp:bool=false, terrain_preview:bool=true,raise_amount:float=1.2,tool_kind:int=0):
 	cursor.visible = p.x<9000 and not excavation; brush_ball.visible = p.x<9000 and terrain_preview
 	if p.x<9000:
 		cursor.position = p+Vector3.UP*0.15; cursor.scale = Vector3(radius/10,1,radius/10)
-		brush_ball.position = brush_center(p,radius,excavation,stamp); brush_ball.scale = Vector3.ONE*radius
+		brush_ball.position = p if tool_kind==2 else brush_center(p,radius,excavation,stamp,raise_amount)
+		brush_ball.scale = Vector3.ONE*radius*(1.06 if natural_edges and tool_kind<=1 else 1.0)
 		var valid=absf(p.x)+radius<=504 and absf(p.z)+radius<=504 and p.y+radius<=TOP-8 and p.y-radius>=BOTTOM+8
 		brush_ball.material_override.set_shader_parameter("tint",Color("f08b79") if excavation or not valid else Color("9debc0"))
 
 func queue_render(frame: Dictionary):
 	if frame.is_empty(): return
 	render_pending = frame; render_stage = 0
+	plant_work_stage=-1
 
 func apply_render_stage():
 	if render_stage<0: return
 	if render_stage<12:
 		var data: PackedFloat32Array = render_pending.plants[render_stage]
-		data=ground_edited_plants(data)
+		if not prepare_grounded_plants(data):return
+		data=plant_work
 		var mm: MultiMesh = plant_nodes[render_stage].multimesh
 		var count = data.size()/12
 		if mm.instance_count!=count: mm.instance_count = count
@@ -282,36 +328,52 @@ func apply_render_stage():
 		field_texture.update(Image.create_from_data(128,128,false,Image.FORMAT_RGBA8,render_pending.fields))
 		height_texture.update(Image.create_from_data(128,128,false,Image.FORMAT_RF,render_pending.heights))
 		water_texture.update(Image.create_from_data(128,128,false,Image.FORMAT_RF,render_pending.depths))
-		refresh_sources()
+		refresh_sources(false)
 	else: render_stage = -1; return
 	render_stage += 1
 
-func ground_edited_plants(data:PackedFloat32Array) -> PackedFloat32Array:
+func refresh_plant_ground_cache():
 	if plant_ground_revision!=terrain_revision:
-		plant_ground_revision=terrain_revision;plant_ground_cache.clear();edited_plant_columns.clear()
+		if plant_ground_revision<0:edited_plant_columns.clear()
+		plant_ground_revision=terrain_revision
 		for origin in model.terrain_blocks:
-			edited_plant_columns[Vector2i(floori(origin.x/32.0),floori(origin.z/32.0))]=true
-		for origin in dirty_blocks:
-			edited_plant_columns[Vector2i(floori(origin.x/32.0),floori(origin.z/32.0))]=true
-	if edited_plant_columns.is_empty():return data
-	var result=PackedFloat32Array()
-	for i in data.size()/12:
-		var p=Vector2(data[i*12+3],data[i*12+11])
-		var transform_data=data.slice(i*12,i*12+12)
-		if edited_plant_columns.has(Vector2i(floori(p.x/32),floori(p.y/32))):
+			var column=Vector2i(floori(origin.x/32.0),floori(origin.z/32.0))
+			edited_plant_columns[column]=true;plant_column_tops[column]=maxf(plant_column_tops.get(column,-48.0),origin.y+40.0)
+		for column in changed_plant_columns:edited_plant_columns[column]=true
+		for p in plant_ground_cache.keys():
+			if changed_plant_columns.has(Vector2i(floori(p.x/32),floori(p.y/32))):plant_ground_cache.erase(p)
+		changed_plant_columns.clear()
+
+func prepare_grounded_plants(data:PackedFloat32Array) -> bool:
+	if plant_work_stage!=render_stage:
+		refresh_plant_ground_cache();plant_work=data.duplicate()
+		plant_work_stage=render_stage;plant_work_index=0;plant_work_count=0
+		if edited_plant_columns.is_empty():plant_work_index=data.size()/12;plant_work_count=plant_work_index;return true
+	var start=Time.get_ticks_usec()
+	while plant_work_index<data.size()/12:
+		var i=plant_work_index;var p=Vector2(data[i*12+3],data[i*12+11]);var h=data[i*12+7]
+		var column=Vector2i(floori(p.x/32),floori(p.y/32))
+		if edited_plant_columns.has(column):
 			if not plant_ground_cache.has(p):
-				var hit=terrain.get_voxel_tool().raycast(Vector3(p.x,TOP-1,p.y),Vector3.DOWN,TOP-BOTTOM-2)
-				plant_ground_cache[p]=TOP-1-hit.distance if hit!=null else -48.0
-			var h:float=plant_ground_cache[p]
-			if h<1:continue
-			transform_data[7]=h
-		result.append_array(transform_data)
-	return result
+				var upper=minf(TOP-1,maxf(model.height_at(p)+64,plant_column_tops.get(column,-48.0)))
+				var hit=terrain.get_voxel_tool().raycast(Vector3(p.x,upper,p.y),Vector3.DOWN,upper-BOTTOM-1)
+				plant_ground_cache[p]=upper-hit.distance if hit!=null else -48.0
+			h=plant_ground_cache[p]
+		if h>=1:
+			if plant_work_count!=i:
+				for k in 12:plant_work[plant_work_count*12+k]=data[i*12+k]
+			plant_work[plant_work_count*12+7]=h;plant_work_count+=1
+		plant_work_index+=1
+		if Time.get_ticks_usec()-start>=2000:return false
+	plant_work.resize(plant_work_count*12)
+	return true
 
 func animate(dt: float, allow_upload: bool = true):
 	phase += dt; update_camera(dt)
 	update_atmosphere(dt)
-	if allow_upload: apply_render_stage()
+	if allow_upload:
+		apply_render_stage()
+		if not source_work.is_empty():process_source_mesh()
 	clouds.position.x = sin(phase*0.035)*70
 	if model.get("rainfall")!=null:
 		rain.visible = model.rainfall>0.1
@@ -374,6 +436,7 @@ func update_atmosphere(dt: float):
 	e.ambient_light_color = Color("8b9ebf").lerp(Color("b4cfcc"),daylight)
 	sun.light_energy = 1.12*daylight
 	moon.light_energy=0.65*(1.0-daylight)
+	moon.visible=daylight<.98;sun.visible=daylight>.02
 	moon.rotation_degrees.y=110.0+sin(cycle*TAU)*15.0
 	moon_disc.position=camera.global_position+moon.global_basis.z*5000.0
 	moon_disc.material_override.albedo_color=Color(0.90,0.94,1.0,1.0-daylight)
@@ -511,33 +574,48 @@ func make_walker(kind:String,j:int):
 	node.position=Vector3(center.x,model.height_at(center),center.y)
 	walkers.append({"node":node,"kind":kind,"home":center,"point":center,"ground":node.position.y,"probe":0.0,"offset":j*3.8+(0 if deer else 1.7),"speed":.22 if deer else .35,"legs":legs,"head":head,"tail":tail})
 
-func refresh_sources():
-	var signature=str(terrain_revision)+str(model.springs)
+func refresh_sources(immediate:bool=true):
+	var signature=str(source_epoch)+str(source_versions)+str(model.springs)
 	for s in model.springs:
 		signature+=str(snappedf(model.water[model.index_at(Vector2(s.x,s.z))],0.2))
 	if signature==source_signature: return
 	source_signature=signature
-	for c in source_markers.get_children(): c.queue_free()
+	source_work.clear()
+	var positions={}
 	for s in model.springs:
-		# A small seep follows the actual terrain; no upright marker in the scenery.
-		var center=Vector2(s.x,s.z)
-		var heights={}
-		var mesh=SurfaceTool.new(); mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
-		for j in 48:
-			var a=j*TAU/48; var b=(j+1)*TAU/48
-			for offset in [Vector2.ZERO,Vector2(cos(b),sin(b))*2.8,Vector2(cos(a),sin(a))*2.8]:
-				var q=center+offset
-				if not heights.has(offset):
-					var ground=model.height_at(q)
-					var hit=terrain.get_voxel_tool().raycast(Vector3(q.x,TOP-1,q.y),Vector3.DOWN,TOP-BOTTOM-2)
-					if hit!=null: ground=TOP-1-hit.distance
-					heights[offset]=maxf(ground,model.height_at(q)+model.water[model.index_at(q)])
-				mesh.set_uv(Vector2.ONE*0.5+offset/5.6); mesh.set_normal(Vector3.UP)
-				mesh.add_vertex(Vector3(q.x,heights[offset]+0.14,q.y))
-		var mat=ShaderMaterial.new(); mat.shader=load("res://shaders/spring.gdshader")
-		var seep=piece(mesh.commit(),mat,Vector3.ZERO,source_markers)
-		seep.set_meta("source_position",center)
-		seep.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var center=Vector2(s.x,s.z);positions[center]=true
+		var stamp=str(source_epoch)+":"+str(source_versions.get(center,0))+":"+str(snappedf(model.water[model.index_at(center)],.2))
+		var cached=false
+		for node in source_markers.get_children():
+			if not node.is_queued_for_deletion() and node.get_meta("source_position")==center and node.get_meta("source_stamp","")==stamp:cached=true
+		if not cached:source_work.append({"center":center,"stamp":stamp})
+	for node in source_markers.get_children():
+		if not positions.has(node.get_meta("source_position")):node.queue_free()
+	if immediate:
+		while not source_work.is_empty():process_source_mesh()
+
+func process_source_mesh():
+	if source_work.is_empty():return
+	var item=source_work.pop_front();var center:Vector2=item.center
+	for node in source_markers.get_children():
+		if node.get_meta("source_position")==center:node.queue_free()
+	var heights={};var mesh=SurfaceTool.new();mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for j in 16:
+		var a=j*TAU/16;var b=(j+1)*TAU/16
+		for offset in [Vector2.ZERO,Vector2(cos(b),sin(b))*2.8,Vector2(cos(a),sin(a))*2.8]:
+			var q=center+offset
+			if not heights.has(offset):
+				var ground=model.height_at(q);var column=Vector2i(floori(q.x/32),floori(q.y/32))
+				var upper=minf(TOP-1,maxf(ground+64,plant_column_tops.get(column,-48.0)))
+				var hit=terrain.get_voxel_tool().raycast(Vector3(q.x,upper,q.y),Vector3.DOWN,upper-BOTTOM-1)
+				if hit!=null:ground=upper-hit.distance
+				heights[offset]=maxf(ground,model.height_at(q)+model.water[model.index_at(q)])
+			mesh.set_uv(Vector2.ONE*.5+offset/5.6);mesh.set_normal(Vector3.UP)
+			mesh.add_vertex(Vector3(q.x,heights[offset]+.14,q.y))
+	var mat=ShaderMaterial.new();mat.shader=load("res://shaders/spring.gdshader")
+	var seep=piece(mesh.commit(),mat,Vector3.ZERO,source_markers)
+	seep.set_meta("source_position",center);seep.set_meta("source_stamp",item.stamp)
+	seep.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 func set_source_focus(enabled: bool, p: Vector3):
 	for seep in source_markers.get_children():

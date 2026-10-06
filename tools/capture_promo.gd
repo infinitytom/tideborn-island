@@ -12,11 +12,12 @@ var built_state:Dictionary
 var deer:Dictionary
 var fox:Dictionary
 var output_dir:String
+var raise_base=Vector3.ZERO
 func _initialize():call_deferred("capture")
 func action(kind:String,t:float):actions.append({"kind":kind,"time":t})
 func upload():
 	game.model.prepare_render_frame();game.visual.queue_render(game.model.render_frame)
-	for i in 16:game.visual.apply_render_stage()
+	while game.visual.render_stage>=0:game.visual.apply_render_stage()
 func pose(p:Vector3,d:float,pitch:float,yaw:float,cut=false):
 	var v=game.visual
 	v.target_focus=p;v.target_distance=d;v.target_pitch=pitch;v.target_yaw=yaw
@@ -70,10 +71,25 @@ func capture():
 			if frame==492:
 				game.undo_edit();upload();await settle();action("click",t)
 		elif t<29:
-			if frame==540:pose(Vector3(298,108,80),280,.42,.40,true)
-			pose(Vector3(298,108,80),280,.42,.40)
-			if frame>=564 and frame<=744 and (frame-564)%5==0:
-				var u=float(frame-564)/180
+			if frame==540:
+				var raise_hit=v.terrain.get_voxel_tool().raycast(Vector3(190,959,70),Vector3.DOWN,1022)
+				raise_base=Vector3(190,959-raise_hit.distance,70)
+				game.selected_tool=0;game.radius=12;game.brush_strength=1;game.stamp_mode=false
+				game.drawing=1;game.raise_active=false;game.stroke_last=Vector3(-9999,-9999,-9999)
+				game.hover=raise_base
+				pose(raise_base+Vector3.UP*35,150,.45,.45,true)
+			if frame<660:
+				pose(raise_base+Vector3.UP*35,150,.45,.45)
+				if frame>=564 and frame<=654 and (frame-564)%2==0:
+					game.apply_brush(2.0/FPS,Vector2(640,400))
+					if frame%12==0:action("earth",t)
+			else:
+				if frame==660:
+					game.drawing=0;game.raise_active=false;game.update_surface(true)
+					pose(Vector3(298,108,80),280,.42,.40,true)
+				pose(Vector3(298,108,80),280,.42,.40)
+			if frame>=660 and frame<=744 and (frame-660)%3==0:
+				var u=float(frame-660)/84
 				var p=Vector3(232+u*116,70+u*68,80+sin(u*PI)*18)
 				v.edit(p,9,0,false,1,true)
 				if frame%15==9:action("earth",t)
