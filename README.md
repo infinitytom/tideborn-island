@@ -1,18 +1,18 @@
 # 潮生岛 · Tideborn Island
 
-**造一座岛，等一个世界生长。**
+**这座岛，想怎么折腾都行。**
 
 一个可以造山、填海、挖洞、种森林，也可以静静看晨昏与四季的三维生态沙盘。
 
-[下载 Windows 版](https://github.com/infinitytom/tideborn-island/releases/latest) · [观看宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.0/TidebornIsland-Trailer.mp4) · [完整操作说明](使用说明.md)
+[下载 Windows 版](https://github.com/infinitytom/tideborn-island/releases/latest) · [观看宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.1/TidebornIsland-Trailer.mp4) · [下载封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.1/TidebornIsland-Cover.png) · [完整操作说明](使用说明.md)
 
-[![宣传片：造一座岛，等一个世界生长](docs/images/trailer-cover.jpg)](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.0/TidebornIsland-Trailer.mp4)
+[![宣传片：这座岛，想怎么折腾都行](docs/images/trailer-cover.jpg)](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.1/TidebornIsland-Trailer.mp4)
 
 ![无遮挡全景](docs/images/panorama.png)
 
 ## 开始游玩
 
-1. 下载 Releases 中的 **TidebornIsland-v0.3.0-Windows-x64.zip**。
+1. 下载 Releases 中的 **TidebornIsland-v0.3.1-Windows-x64.zip**。
 2. 完整解压，双击 **TidebornIsland.exe** 或「启动游戏.cmd」。
 3. 点击「认识这个世界」了解操作；「全景欣赏」可以直接看看小岛。
 
@@ -23,7 +23,7 @@
 - 真正的三维体素地形：填海、造山、开洞、隧道与悬挑。
 - 范围 3–48 米的笔刷、可调塑形力度、指定高度悬空塑形，以及撤销与重做。
 - 自然播种，让环境筛选群落；自由创造可直接种植并保留 12 种植物。
-- 水源、土壤湿度、地表水与近海生态相互联系。
+- 水源、土壤湿度、地表水与近海生态相互联系。泉眼贴合地形，以细涟漪融入景物；使用水源工具靠近时显示边缘提示，右键可移除。
 - 春夏绿意、秋季金红叶片、冬季雪地与湖冰，晨昏连续渐变。
 - **P 全景模式**：隐藏全部界面和笔刷，缓慢环绕，生态继续运转。P / Esc 返回；中键、滚轮仍可调整镜头。
 - 原创循环音乐、海浪雨声与操作音效，可独立调节音量。

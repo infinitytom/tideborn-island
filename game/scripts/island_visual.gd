@@ -16,6 +16,7 @@ var water_texture: ImageTexture
 var plant_nodes: Array = []
 var props: Node3D
 var source_markers: Node3D
+var source_signature: String = ""
 var flying: Array = []
 var clouds: MultiMeshInstance3D
 var rain: MultiMeshInstance3D
@@ -364,14 +365,38 @@ func refresh_animals():
 				flying.append({"node":node,"origin":origin,"radius":12.0+j*3,"height":2.0,"speed":0.5+j*0.1,"phase":j*2.0})
 
 func refresh_sources():
-	for c in source_markers.get_children(): c.queue_free()
-	var mat=material(Color("76e2ed")); mat.emission_enabled=true; mat.emission=Color("2c8f9e"); mat.emission_energy_multiplier=0.5
+	var signature=str(terrain_revision)+str(model.springs)
 	for s in model.springs:
-		var h=model.height_at(Vector2(s.x,s.z))
-		var node=Node3D.new(); node.position=Vector3(s.x,h+0.5,s.z); source_markers.add_child(node)
-		piece(make_ring(3.0,0.45),mat,Vector3.ZERO,node)
-		piece(cylinder(0.25,0.85,4.0,8),mat,Vector3(0,2.0,0),node)
-		piece(sphere(0.8),mat,Vector3(0,4,0),node)
+		signature+=str(snappedf(model.water[model.index_at(Vector2(s.x,s.z))],0.2))
+	if signature==source_signature: return
+	source_signature=signature
+	for c in source_markers.get_children(): c.queue_free()
+	for s in model.springs:
+		# A small seep follows the actual terrain; no upright marker in the scenery.
+		var center=Vector2(s.x,s.z)
+		var heights={}
+		var mesh=SurfaceTool.new(); mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for j in 48:
+			var a=j*TAU/48; var b=(j+1)*TAU/48
+			for offset in [Vector2.ZERO,Vector2(cos(b),sin(b))*2.8,Vector2(cos(a),sin(a))*2.8]:
+				var q=center+offset
+				if not heights.has(offset):
+					var ground=model.height_at(q)
+					var hit=terrain.get_voxel_tool().raycast(Vector3(q.x,TOP-1,q.y),Vector3.DOWN,TOP-BOTTOM-2)
+					if hit!=null: ground=TOP-1-hit.distance
+					heights[offset]=maxf(ground,model.height_at(q)+model.water[model.index_at(q)])
+				mesh.set_uv(Vector2.ONE*0.5+offset/5.6); mesh.set_normal(Vector3.UP)
+				mesh.add_vertex(Vector3(q.x,heights[offset]+0.14,q.y))
+		var mat=ShaderMaterial.new(); mat.shader=load("res://shaders/spring.gdshader")
+		var seep=piece(mesh.commit(),mat,Vector3.ZERO,source_markers)
+		seep.set_meta("source_position",center)
+		seep.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+func set_source_focus(enabled: bool, p: Vector3):
+	for seep in source_markers.get_children():
+		if seep.is_queued_for_deletion(): continue
+		var near=enabled and Vector2(p.x,p.z).distance_to(seep.get_meta("source_position"))<12
+		seep.material_override.set_shader_parameter("selected",1.0 if near else 0.0)
 
 func make_ring(radius: float, thickness: float) -> ArrayMesh:
 	var st = SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)

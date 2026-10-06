@@ -344,6 +344,7 @@ func set_panorama(value: bool):
 		panorama=true; home_visible=false; home.visible=false; hud.visible=false
 		drawing=0; orbiting=false; panning=false; hover=Vector3(9999,9999,9999)
 		visual.set_cursor(hover,radius,false); visual.preview_clock=-1
+		visual.set_source_focus(false,hover)
 		var low=Vector2(512,512); var high=Vector2(-512,-512); var top=25.0
 		for i in model.COUNT:
 			if model.heights[i]>1:
@@ -653,6 +654,7 @@ func _process(dt: float):
 	hover = Vector3(9999,9999,9999) if blocked else visual.pick(get_viewport().get_mouse_position())
 	if stamp_mode and selected_tool==0 and not blocked: hover=visual.pick_plane(get_viewport().get_mouse_position(),placement_height)
 	visual.set_cursor(hover,radius,selected_tool==1 or (stamp_mode and selected_tool==0))
+	visual.set_source_focus(selected_tool==3,hover)
 	if drawing!=0 and not blocked:
 		brush_timer += dt
 		if brush_timer>=0.033: brush_timer = 0; apply_brush()
