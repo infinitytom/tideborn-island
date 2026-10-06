@@ -214,6 +214,8 @@ func count_ecology():
 	if wet_count>90: animals.append("野鸭")
 	if flowers>40: animals.append("蝴蝶")
 	if forests>70: animals.append("林鸟")
+	if forests>70 and community_counts[1]>35: animals.append("鹿")
+	if forests>100 and plant_count>250: animals.append("狐狸")
 
 func scatter(p: Vector2, radius: float, community: int = 0):
 	var ci = index_at(p); var r = int(ceil(radius/CELL))+1

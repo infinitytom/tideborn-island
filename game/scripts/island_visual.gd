@@ -18,11 +18,15 @@ var props: Node3D
 var source_markers: Node3D
 var source_signature: String = ""
 var flying: Array = []
+var walkers: Array = []
 var clouds: MultiMeshInstance3D
 var rain: MultiMeshInstance3D
 var cursor: MeshInstance3D
 var brush_ball: MeshInstance3D
 var dirty_blocks: Dictionary = {}
+var plant_ground_cache: Dictionary = {}
+var edited_plant_columns: Dictionary = {}
+var plant_ground_revision: int = -1
 var yaw: float = 0.55
 var pitch: float = 0.62
 var distance: float = 620
@@ -246,6 +250,7 @@ func apply_render_stage():
 	if render_stage<0: return
 	if render_stage<12:
 		var data: PackedFloat32Array = render_pending.plants[render_stage]
+		data=ground_edited_plants(data)
 		var mm: MultiMesh = plant_nodes[render_stage].multimesh
 		var count = data.size()/12
 		if mm.instance_count!=count: mm.instance_count = count
@@ -262,6 +267,28 @@ func apply_render_stage():
 	else: render_stage = -1; return
 	render_stage += 1
 
+func ground_edited_plants(data:PackedFloat32Array) -> PackedFloat32Array:
+	if plant_ground_revision!=terrain_revision:
+		plant_ground_revision=terrain_revision;plant_ground_cache.clear();edited_plant_columns.clear()
+		for origin in model.terrain_blocks:
+			edited_plant_columns[Vector2i(floori(origin.x/32.0),floori(origin.z/32.0))]=true
+		for origin in dirty_blocks:
+			edited_plant_columns[Vector2i(floori(origin.x/32.0),floori(origin.z/32.0))]=true
+	if edited_plant_columns.is_empty():return data
+	var result=PackedFloat32Array()
+	for i in data.size()/12:
+		var p=Vector2(data[i*12+3],data[i*12+11])
+		var transform_data=data.slice(i*12,i*12+12)
+		if edited_plant_columns.has(Vector2i(floori(p.x/32),floori(p.y/32))):
+			if not plant_ground_cache.has(p):
+				var hit=terrain.get_voxel_tool().raycast(Vector3(p.x,TOP-1,p.y),Vector3.DOWN,TOP-BOTTOM-2)
+				plant_ground_cache[p]=TOP-1-hit.distance if hit!=null else -48.0
+			var h:float=plant_ground_cache[p]
+			if h<1:continue
+			transform_data[7]=h
+		result.append_array(transform_data)
+	return result
+
 func animate(dt: float, allow_upload: bool = true):
 	phase += dt; update_camera(dt)
 	update_atmosphere(dt)
@@ -276,6 +303,35 @@ func animate(dt: float, allow_upload: bool = true):
 		var t = phase*data.speed+data.phase
 		node.position = data.origin+Vector3(sin(t)*data.radius,sin(t*2)*data.height,cos(t)*data.radius*0.7)
 		node.rotation.y = -t
+	animate_walkers(dt)
+
+func animate_walkers(dt: float):
+	for data in walkers:
+		var t=phase*data.speed+data.offset
+		var resting=fmod(phase+data.offset,16.0)>11.0
+		var target=data.home+Vector2(sin(t)*9,cos(t*0.7)*7)
+		var next:Vector2=data.point.move_toward(target,dt*(2.1 if data.kind=="鹿" else 3.4))
+		var index=model.index_at(next)
+		var moved=false
+		var space=true
+		for other in walkers:
+			if other.node!=data.node and next.distance_to(other.point)<5.5: space=false
+		if space and not resting and model.heights[index]>2 and model.water[index]<0.25 and model.slope[index]<0.35 and model.species[index]<8:
+			var delta:Vector2=next-data.point
+			moved=delta.length()>0.002
+			if moved: data.node.rotation.y=lerp_angle(data.node.rotation.y,atan2(delta.x,delta.y),minf(1,dt*4))
+			data.point=next
+		data.probe-=dt
+		if data.probe<=0:
+			data.probe=0.2
+			data.ground=model.height_at(data.point)
+			var hit=terrain.get_voxel_tool().raycast(Vector3(data.point.x,minf(TOP-1,data.ground+45),data.point.y),Vector3.DOWN,100)
+			if hit!=null: data.ground=minf(TOP-1,data.ground+45)-hit.distance
+		data.node.position=Vector3(data.point.x,data.ground,data.point.y)
+		for i in data.legs.size():
+			data.legs[i].rotation.x=sin(phase*(5.5 if data.kind=="鹿" else 8.0)+PI*(1 if i in [1,2] else 0))*0.35 if moved else 0.0
+		data.head.rotation.x=lerpf(data.head.rotation.x,0.9 if resting and data.kind=="鹿" else 0.0,minf(1,dt*2))
+		data.tail.rotation.y=sin(phase*2+data.offset)*0.2
 
 func set_night(value: bool):
 	preview_clock = 120.0 if value else 40.0
@@ -340,8 +396,11 @@ func make_atmosphere():
 
 func refresh_animals():
 	for c in props.get_children(): c.queue_free()
-	flying = []
+	flying = []; walkers=[]
 	for name_text in model.animals:
+		if name_text in ["鹿","狐狸"]:
+			for j in (3 if name_text=="鹿" else 2): make_walker(name_text,j)
+			continue
 		for j in (5 if name_text in ["蝴蝶","蜻蜓","林鸟"] else 3):
 			var node = Node3D.new(); props.add_child(node)
 			var center = Vector2(-25+j*14,40+j*9)
@@ -363,6 +422,70 @@ func refresh_animals():
 				piece(sphere(0.25,0.9),material(Color("4b615a")),Vector3.ZERO,node).rotation.x = PI/2
 				origin.y += 30 if name_text=="林鸟" else 6
 				flying.append({"node":node,"origin":origin,"radius":12.0+j*3,"height":2.0,"speed":0.5+j*0.1,"phase":j*2.0})
+
+func animal_site(kind:String,j:int) -> Vector2:
+	var preferred=Vector2(75+j*24,55+j*16) if kind=="鹿" else Vector2(-75-j*22,-20+j*25)
+	var best=Vector2.ZERO; var score=INF
+	for i in model.COUNT:
+		if model.heights[i]<3 or model.heights[i]>120 or model.water[i]>0.2 or model.slope[i]>0.22 or model.species[i]>=8: continue
+		var p=model.pos(i)
+		var flat=true
+		for existing in walkers:
+			if p.distance_to(existing.home)<12: flat=false
+		for offset in [Vector2(8,0),Vector2(-8,0),Vector2(0,8),Vector2(0,-8)]:
+			if absf(model.height_at(p+offset)-model.heights[i])>2.2 or model.water[model.index_at(p+offset)]>.2: flat=false
+		if not flat: continue
+		var value=p.distance_squared_to(preferred)+(500 if model.habitat[i] not in [1,3] else 0)
+		if value<score: score=value; best=p
+	return best
+
+func animal_piece(mesh:Mesh,mat:Material,p:Vector3,scale_v:Vector3,parent:Node3D) -> MeshInstance3D:
+	var node=piece(mesh,mat,p,parent); node.scale=scale_v; return node
+
+func antler(a:Vector3,b:Vector3,parent:Node3D,mat:Material):
+	var node=piece(cylinder(0.07,0.11,a.distance_to(b),6),mat,(a+b)*0.5,parent)
+	node.basis=Basis(Quaternion(Vector3.UP,(b-a).normalized()))
+
+func make_walker(kind:String,j:int):
+	var node=Node3D.new(); node.name=kind+str(j+1); props.add_child(node)
+	var center=animal_site(kind,j)
+	var deer=kind=="鹿"
+	var fur=material(Color("a7794f") if deer else Color("cc702e"))
+	var pale=material(Color("e7d9b7")); var dark=material(Color("382e29"))
+	var legs=[]; var body_y=3.1 if deer else 1.45
+	animal_piece(sphere(1.3 if deer else 0.9),fur,Vector3(0,body_y,0),Vector3(0.8,0.86,2.0),node)
+	animal_piece(sphere(0.9 if deer else 0.55),pale,Vector3(0,body_y-0.6,0.1),Vector3(0.75,0.4,1.6),node)
+	for i in 4:
+		var leg=Node3D.new(); leg.position=Vector3((-0.75 if i<2 else 0.75) if deer else (-0.45 if i<2 else 0.45),body_y-0.3,(1.5 if i%2==0 else -1.5) if deer else (0.9 if i%2==0 else -0.9)); node.add_child(leg)
+		var length=2.8 if deer else 1.2
+		piece(cylinder(0.16 if deer else 0.13,0.2,length,7),fur,Vector3(0,-length*0.5,0),leg)
+		animal_piece(sphere(0.24 if deer else 0.19),dark,Vector3(0,-length+0.12,0.08),Vector3(1,.55,1.4),leg)
+		legs.append(leg)
+	var head=Node3D.new(); head.position=Vector3(0,3.8,1.7) if deer else Vector3(0,1.5,1.45); node.add_child(head)
+	if deer:
+		piece(cylinder(.5,.7,1.8,9),fur,Vector3(0,.65,.2),head).rotation.x=.25
+		animal_piece(sphere(.75),fur,Vector3(0,1.65,.65),Vector3(.8,.85,1.3),head)
+		animal_piece(sphere(.48),pale,Vector3(0,1.4,1.55),Vector3(.8,.65,1.35),head)
+		for side in [-1,1]:
+			animal_piece(sphere(.4),fur,Vector3(side*.65,2.15,.55),Vector3(.6,1.5,.45),head).rotation.z=side*-.4
+			piece(sphere(.10),dark,Vector3(side*.53,1.8,1.1),head)
+			var base=Vector3(side*.4,2.15,.55)
+			antler(base,base+Vector3(side*.4,1.6,-.2),head,pale)
+			for k in 3:
+				var a=base+Vector3(side*.13*k,.4+k*.4,-.05*k)
+				antler(a,a+Vector3(side*.45,.45,.35),head,pale)
+	else:
+		animal_piece(sphere(.72),fur,Vector3(0,.35,.3),Vector3(.8,.8,1),head)
+		var muzzle=piece(cylinder(.08,.45,1.0,8),pale,Vector3(0,.15,1.0),head); muzzle.rotation.x=PI/2
+		piece(sphere(.14),dark,Vector3(0,.15,1.5),head)
+		for side in [-1,1]:
+			piece(cylinder(0,.35,.9,3),fur,Vector3(side*.4,.95,.15),head).rotation.z=side*-.18
+			piece(sphere(.10),dark,Vector3(side*.44,.42,.7),head)
+	var tail=Node3D.new(); tail.position=Vector3(0,body_y,-2.4 if deer else -1.5); node.add_child(tail)
+	animal_piece(sphere(.35 if deer else .65),pale if deer else fur,Vector3(0,0,-.2 if deer else -.8),Vector3(.6,.65,1.6),tail)
+	if not deer: animal_piece(sphere(.4),pale,Vector3(0,0,-1.5),Vector3(.7,.7,1.3),tail)
+	node.position=Vector3(center.x,model.height_at(center),center.y)
+	walkers.append({"node":node,"kind":kind,"home":center,"point":center,"ground":node.position.y,"probe":0.0,"offset":j*3.8+(0 if deer else 1.7),"speed":.22 if deer else .35,"legs":legs,"head":head,"tail":tail})
 
 func refresh_sources():
 	var signature=str(terrain_revision)+str(model.springs)

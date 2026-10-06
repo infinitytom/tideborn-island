@@ -1,19 +1,21 @@
-# 潮生岛 · Tideborn Island
+# 小岛叠叠乐 · Island Stack
 
-**这座岛，想怎么折腾都行。**
+**想怎么叠，就怎么叠。**
 
 一个可以造山、填海、挖洞、种森林，也可以静静看晨昏与四季的三维生态沙盘。
 
-[下载 Windows 版](https://github.com/infinitytom/tideborn-island/releases/latest) · [观看宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.1/TidebornIsland-Trailer.mp4) · [下载封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.1/TidebornIsland-Cover.png) · [完整操作说明](使用说明.md)
+[下载 Windows 版](https://github.com/infinitytom/tideborn-island/releases/latest) · [观看宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.2/IslandStack-Trailer.mp4) · [下载封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.2/IslandStack-Cover.png) · [完整操作说明](使用说明.md)
 
-[![宣传片：这座岛，想怎么折腾都行](docs/images/trailer-cover.jpg)](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.1/TidebornIsland-Trailer.mp4)
+[![宣传片：小岛叠叠乐](docs/images/trailer-cover.jpg)](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.2/IslandStack-Trailer.mp4)
+
+![新版开始界面](docs/images/home.png)
 
 ![无遮挡全景](docs/images/panorama.png)
 
 ## 开始游玩
 
-1. 下载 Releases 中的 **TidebornIsland-v0.3.1-Windows-x64.zip**。
-2. 完整解压，双击 **TidebornIsland.exe** 或「启动游戏.cmd」。
+1. 下载 Releases 中的 **IslandStack-v0.3.2-Windows-x64.zip**。
+2. 完整解压，双击 **IslandStack.exe** 或「启动游戏.cmd」。
 3. 点击「认识这个世界」了解操作；「全景欣赏」可以直接看看小岛。
 
 运行包已包含定制引擎，无需安装 Godot。请保留 exe 旁边的 pck 文件。
@@ -27,7 +29,8 @@
 - 春夏绿意、秋季金红叶片、冬季雪地与湖冰，晨昏连续渐变。
 - **P 全景模式**：隐藏全部界面和笔刷，缓慢环绕，生态继续运转。P / Esc 返回；中键、滚轮仍可调整镜头。
 - 原创循环音乐、海浪雨声与操作音效，可独立调节音量。
-- 岛屿保存、自动保存、历史记录和数字种子。
+- 鹿与狐狸随栖息地条件出现，慢走、停步低头、巡游与摆尾，近景更容易观察。
+- 岛屿保存、自动保存、历史记录和数字种子；改名后保留原存档位置。
 
 | 秋季 | 冬季 |
 | --- | --- |
@@ -63,11 +66,11 @@
 ~~~powershell
 .\godot-voxel.exe --editor --path .\game
 .\godot-voxel.exe --headless --path .\game --script res://tests/eco_test.gd
-.\godot-voxel.exe --headless --path .\game --export-pack "Windows Portable" .\dist\TidebornIsland.pck
+.\godot-voxel.exe --headless --path .\game --export-pack "Windows Portable" .\dist\IslandStack.pck
 ~~~
 
 打包脚本：`tools/build_portable.ps1 -EnginePath .\godot-voxel.exe`。宣传片镜头脚本：`tools/capture_promo.gd`，使用真实场景录制。
 
-生态测试 12 项通过。下载包实测覆盖音频输出、赞赏码弹窗、全景模式与退出、高处地形创建和存档恢复、撤销重做、自由种植、晨昏与季节、键鼠、洞穴、填海及开凿。详细结果见 [验证记录](验证记录.md)。
+生态测试 12 项通过。新增图形验证覆盖鹿与狐狸贴地行走、存档重建、真实鼠标路径的悬空塑形、笔刷操作音效与撤销重做。下载包实测覆盖音频输出、赞赏码弹窗、全景模式与退出、高处地形创建和存档恢复、撤销重做、自由种植、晨昏与季节、键鼠、洞穴、填海及开凿。详细结果见 [验证记录](验证记录.md)。
 
 [第三方运行库许可](THIRD_PARTY_NOTICES.txt) · [问题反馈](https://github.com/infinitytom/tideborn-island/issues)

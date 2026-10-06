@@ -30,12 +30,12 @@ void fragment(){
  float c2=cos(world.x*0.17+world.z*0.13+sin(world.z*0.047)*1.4+TIME*1.1);
  vec3 n=normalize(vec3(-(c0*0.034+c1*0.081*0.35+c2*0.008)*amp,1.0,-(c0*0.019-c1*0.047*0.35+c2*0.006)*amp));
  NORMAL=normalize((VIEW_MATRIX*vec4(n,0.0)).xyz);
- vec3 shallow=lake?vec3(0.17,0.49,0.43):vec3(0.22,0.55,0.57); vec3 deep=vec3(0.09,0.30,0.41);
+ vec3 shallow=lake?vec3(0.13,0.35,0.29):vec3(0.16,0.40,0.40); vec3 deep=vec3(0.055,0.22,0.30);
  vec3 col=mix(shallow,deep,smoothstep(1.0,30.0,d));
  float fresnel=pow(1.0-max(0.0,dot(NORMAL,VIEW)),4.0);
- col=mix(col,vec3(0.63,0.76,0.78),fresnel*(lake?0.25:0.55));
+ col=mix(col,vec3(0.44,0.61,0.64),fresnel*(lake?0.20:0.38));
  float foam=(1.0-smoothstep(0.3,2.0,d))*clamp(sin(world.x*0.13+world.z*0.18-TIME*1.2)*0.5+0.2,0.0,1.0);
  col=mix(col,vec3(0.72,0.81,0.74),foam*0.28);
  col=mix(col,vec3(0.67,0.79,0.84),ice);
- ALBEDO=col*(1.0-night*0.38); ROUGHNESS=mix(0.36,0.60,ice); METALLIC=0.08; SPECULAR=0.45;
+ ALBEDO=col*(1.0-night*0.38); ROUGHNESS=mix(0.28,0.60,ice); METALLIC=0.0; SPECULAR=0.5;
 }

@@ -87,7 +87,7 @@ func _ready():
 	isolated = OS.get_cmdline_user_args().has("--smoke-test") or OS.get_cmdline_user_args().has("--performance-test") or OS.get_cmdline_user_args().has("--polish-test") or OS.get_cmdline_user_args().has("--promo-capture")
 	if isolated: save_path = "user://validation_v2.save"
 	font = SystemFont.new(); font.font_names = PackedStringArray(["Microsoft YaHei UI","Microsoft YaHei"])
-	DisplayServer.window_set_title("潮生岛 · 一座岛，一个小世界")
+	DisplayServer.window_set_title("小岛叠叠乐 · 想怎么叠，就怎么叠")
 	model = Model.new(); model.reset(260104)
 	visual = Visual.new(); add_child(visual); visual.setup(model)
 	sound = Sound.new(); add_child(sound); sound.setup(model)
@@ -99,9 +99,10 @@ func _ready():
 	if OS.get_cmdline_user_args().has("--polish-test"): polish_test.call_deferred()
 
 func style(c: Color, corners: int = 15, padding: int = 12) -> StyleBoxFlat:
-	var s = StyleBoxFlat.new(); s.bg_color = c; s.set_corner_radius_all(corners)
+	var s = StyleBoxFlat.new(); s.bg_color = c; s.set_corner_radius_all(mini(corners,18))
+	s.set_border_width_all(1); s.border_color=Color("d7e2db")
 	s.content_margin_left = padding; s.content_margin_right = padding; s.content_margin_top = padding; s.content_margin_bottom = padding
-	s.shadow_color = Color(0.12,0.22,0.25,0.08); s.shadow_size = 6
+	s.shadow_color = Color(0.06,0.15,0.16,0.16); s.shadow_size = 12; s.shadow_offset=Vector2(0,4)
 	return s
 
 func label(text_value: String, size_v: int = 15, col: Color = Color("354f52")) -> Label:
@@ -114,11 +115,15 @@ func button(text_value: String, callback: Callable, icon: Texture2D = null) -> B
 	b.add_theme_font_override("font",font); b.add_theme_font_size_override("font_size",16)
 	b.add_theme_color_override("font_color",Color("345255")); b.add_theme_color_override("font_hover_color",Color("1d3c41"))
 	b.add_theme_color_override("font_pressed_color",Color("1d3c41")); b.add_theme_color_override("font_disabled_color",Color("9daead"))
-	b.add_theme_stylebox_override("normal",style(Color(0.95,0.97,0.93,0.92)))
-	b.add_theme_stylebox_override("hover",style(Color("e2ede3")))
-	b.add_theme_stylebox_override("pressed",style(Color("c7dfd1")))
+	b.add_theme_stylebox_override("normal",style(Color("eef3ec"),10,11))
+	b.add_theme_stylebox_override("hover",style(Color("d8e9df"),10,11))
+	b.add_theme_stylebox_override("pressed",style(Color("b9d5c5"),10,11))
 	b.add_theme_stylebox_override("disabled",style(Color(0.95,0.97,0.93,0.45)))
 	b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
+	for state in ["normal","hover","pressed","disabled"]:
+		var skin=b.get_theme_stylebox(state).duplicate()
+		skin.shadow_size=0; skin.set_border_width_all(0)
+		b.add_theme_stylebox_override(state,skin)
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND; b.pressed.connect(func(): sound.effect("click"); callback.call())
 	return b
 
@@ -239,13 +244,16 @@ func build_ui():
 	ui = Control.new(); ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); ui.mouse_filter = Control.MOUSE_FILTER_IGNORE; canvas.add_child(ui)
 	ui.theme = make_theme()
 	home = Control.new(); home.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); home.mouse_filter = Control.MOUSE_FILTER_IGNORE; ui.add_child(home)
-	var card = Panel.new(); card.position = Vector2(48,110); card.size = Vector2(345,690); card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_theme_stylebox_override("panel",style(Color("f5f7ef"),24,24)); home.add_child(card)
-	var title = label("潮生岛",52); title.position = Vector2(82,147); home.add_child(title)
-	var english = label("T I D E B O R N   I S L A N D",13,Color("68868a")); english.position = Vector2(86,219); home.add_child(english)
-	var subtitle = label("从一座岛开始，\n养出一个小世界。",20); subtitle.position = Vector2(86,257); home.add_child(subtitle)
+	var card = Panel.new(); card.position = Vector2(44,104); card.size = Vector2(358,690); card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_theme_stylebox_override("panel",style(Color("f7f8f0"),18,24)); home.add_child(card)
+	var tag=label("一座小岛，随手叠出小世界",13,Color("687f72")); tag.position=Vector2(79,140); home.add_child(tag)
+	var title = label("小岛叠叠乐",43,Color("244e45")); title.position = Vector2(78,178); home.add_child(title)
+	var english = label("I S L A N D   S T A C K",12,Color("68868a")); english.position = Vector2(82,242); home.add_child(english)
+	var subtitle = label("挖一挖，叠一叠。\n等森林和小动物来作伴。",18); subtitle.position = Vector2(82,273); home.add_child(subtitle)
 	var menus = VBoxContainer.new(); menus.position = Vector2(86,330); menus.size.x = 267; menus.add_theme_constant_override("separation",9); home.add_child(menus)
-	var new_b = button("开始新岛屿",show_new_island); new_b.custom_minimum_size = Vector2(267,45); menus.add_child(new_b)
+	var new_b = button("叠一座新岛",show_new_island); new_b.custom_minimum_size = Vector2(267,45); menus.add_child(new_b)
+	new_b.add_theme_color_override("font_color",Color("f8f8eb")); new_b.add_theme_color_override("font_hover_color",Color("ffffff")); new_b.add_theme_color_override("font_pressed_color",Color("ffffff"))
+	new_b.add_theme_stylebox_override("normal",style(Color("356757"),10,11)); new_b.add_theme_stylebox_override("hover",style(Color("447c67"),10,11)); new_b.add_theme_stylebox_override("pressed",style(Color("294e43"),10,11))
 	var continue_b = button("继续",continue_game); continue_b.name = "Continue"; continue_button=continue_b; continue_b.custom_minimum_size = Vector2(267,50); menus.add_child(continue_b)
 	menus.add_child(button("全景欣赏",func(): set_panorama(true))); menus.add_child(button("认识这个世界",show_help)); menus.add_child(button("设置",show_settings)); menus.add_child(button("支持创作者",show_support)); menus.add_child(button("退出",exit_game))
 	var home_note = label("天空 · 陆地 · 海洋\n日照、云雨与生物群落，在这里慢慢循环。",13,Color("5d7d80")); home_note.position = Vector2(86,716); home.add_child(home_note)
@@ -450,7 +458,7 @@ func save_settings():
 	cfg.save("user://settings.cfg")
 
 func show_help():
-	open_popup("认识潮生岛",660)
+	open_popup("认识小岛叠叠乐",660)
 	var l = label("这是一座可以亲手塑造的生态沙盘。没有任务期限，
 你可以造山、填海、穿山挖洞，也可以种出一片自己的森林。
 
@@ -469,7 +477,7 @@ Shift 固定塑形/开凿高度，适合横向挖隧道。
 
 让世界自己生长
 自然模式：植物由湿度、日照、温度、坡度筛选。
-水源沿地表流动；海洋蒸发与植物蒸腾补充云雨。
+鹿与狐狸随林地、草甸条件出现，会慢走、停步低头与摆尾。\n水源沿地表流动；海洋蒸发与植物蒸腾补充云雨。
 春季嫩绿，夏季浓绿，秋叶金红，冬季积雪与湖冰。
 一昼夜约 160 秒，一季约 5 分钟（1×速度）。
 晨昏会渐变；N 预览昼夜，设置可恢复自然循环。
@@ -588,7 +596,8 @@ func apply_brush():
 	if stroke_last.x<9000 and stroke_last.distance_to(point)>radius*0.4:
 		var count = mini(3,int(stroke_last.distance_to(point)/(radius*0.4)))
 		for k in range(1,count+1): visual.edit(stroke_last.lerp(point,float(k)/(count+1)),radius,selected_tool,drawing<0,brush_strength,stamp_mode)
-	visual.edit(point,radius,selected_tool,drawing<0); stroke_last = point; edit_revision += 1
+	visual.edit(point,radius,selected_tool,drawing<0,brush_strength,stamp_mode); stroke_last = point; edit_revision += 1
+	sound.effect("smooth" if selected_tool==2 else "cut" if selected_tool==1 or drawing<0 else "earth")
 	var ci = model.index_at(Vector2(point.x,point.z)); var r = int(ceil(radius/model.CELL))+1
 	for z in range(maxi(1,ci/model.N-r),mini(model.N-1,ci/model.N+r+1)):
 		for x in range(maxi(1,ci%model.N-r),mini(model.N-1,ci%model.N+r+1)): pending_surface[x+z*model.N] = true

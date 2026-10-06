@@ -1,8 +1,11 @@
 config_version=5
 
 [application]
-config/name="潮生岛"
-config/version="0.3.1"
+config/name="小岛叠叠乐"
+config/icon="res://icons/island_stack.svg"
+config/version="0.3.2"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/潮生岛"
 run/main_scene="res://main.tscn"
 
 [display]

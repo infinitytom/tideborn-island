@@ -12,7 +12,7 @@ void vertex(){
  tip=VERTEX.y;
  vec3 world=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
  variety=sin(world.x*0.11+world.z*0.17)*0.5+0.5;
- float strength=woody?0.10:0.045;
+ float strength=woody?0.028:0.045;
  VERTEX.x+=sin(TIME*1.15+world.x*0.07+world.z*0.04)*max(VERTEX.y-1.0,0.0)*strength;
 }
 void fragment(){
@@ -26,5 +26,5 @@ void fragment(){
  }
  float snow=season_weights.w*smoothstep(0.35,0.85,NORMAL.y);
  col=mix(col,vec3(0.91,0.95,0.97),snow*0.8);
- ALBEDO=col*(0.86+variety*0.12); ROUGHNESS=0.88;
+ ALBEDO=col*(0.76+variety*0.15); ROUGHNESS=0.92; SPECULAR=0.2;
 }
