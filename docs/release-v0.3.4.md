@@ -10,4 +10,4 @@
 
 验证覆盖松手后的完整帧耗时、连续抬升、不同更新频率下的抬升高度、自然边缘差异、撤销重做与保存恢复，以及生态、动物、泉眼、世界管理、昼夜和全景回归。测试使用独立存档。
 
-[重新录制的 49 秒宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Trailer.mp4)加入持续抬升与自然笔触，展示沟槽、隧道、撤销、石桥、浮岛种植和鹿、狐狸活动；配套[实景封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Cover.png)。标题沿用《小岛叠叠乐》，副标题「想怎么叠，就怎么叠」。
+[重新录制的 57 秒宣传片](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Trailer.mp4)加入持续抬升、自然笔触与平滑塑形前后对比，展示沟槽、隧道、撤销、石桥、浮岛种植和鹿、狐狸活动；配套[实景封面](https://github.com/infinitytom/tideborn-island/releases/download/v0.3.4/IslandStack-Cover.png)。标题沿用《小岛叠叠乐》，副标题「想怎么叠，就怎么叠」。

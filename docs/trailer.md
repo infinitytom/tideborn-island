@@ -2,7 +2,7 @@
 
 游戏、宣传片和封面统一使用 **小岛叠叠乐 / Island Stack**。副标题：想怎么叠，就怎么叠。
 
-v0.3.4 完成优化后重新录制。49 秒、1280×720、30 FPS，H.264 / AAC。1470 帧来自真实 Godot 场景，使用游戏的球形笔刷、自然笔触、撤销与种植方法；抬升片段调用实际连续操作入口，按录制时间累积高度。没有通过其他形状或生成式视频替代游戏功能。
+v0.3.4 完成优化后重新录制，并补充平滑塑形近景。57 秒、1280×720、30 FPS，H.264 / AAC。1710 帧来自真实 Godot 场景，使用游戏的球形笔刷、自然笔触、平滑、撤销与种植方法；抬升和平滑片段调用实际连续操作入口。没有通过其他形状或生成式视频替代游戏功能。
 
 | 时间 | 展示内容 |
 | --- | --- |
@@ -12,9 +12,10 @@ v0.3.4 完成优化后重新录制。49 秒、1280×720、30 FPS，H.264 / AAC�
 | 18–22 秒 | 保持同一落点按住抬升，连续叠高，并显示自然笔触的轻微边缘起伏 |
 | 22–29 秒 | 密集连续塑形搭出石桥，叠出高处平台，再切开连接留下浮岛 |
 | 29–34 秒 | 在浮岛上种树、种花 |
-| 34–39 秒 | 鹿的慢走、四肢摆动、停步低头近景 |
-| 39–44 秒 | 狐狸的小步巡游与尾巴摆动近景 |
-| 44–49 秒 | 完成场景的全景与名称、下载入口 |
+| 34–42 秒 | 固定近景显示平滑前、连续平滑过程和平滑后，揉开预先塑造的凹凸 |
+| 42–47 秒 | 鹿的慢走、四肢摆动、停步低头近景 |
+| 47–52 秒 | 狐狸的小步巡游与尾巴摆动近景 |
+| 52–57 秒 | 完成场景的全景与名称、下载入口 |
 
 沟槽与穿山镜头的示范山体录制前用塑形搭建；石拱和动物镜头清理了前景植物。动物镜头来自岛屿原有栖息地，而非手动添加未开放的物种。拍完动物后恢复示范岛的编辑快照拍摄全景。悬空保持是允许的自由创造效果，没有宣称自动坍塌；动物有活动表现，没有宣称独立觅食、繁殖或捕食。
 
@@ -26,7 +27,8 @@ v0.3.4 完成优化后重新录制。49 秒、1280×720、30 FPS，H.264 / AAC�
 
 ~~~powershell
 & '.\godot.windows.editor.double.x86_64.exe\godot.windows.editor.double.x86_64.exe' --path game --script ../tools/capture_promo.gd --fixed-fps 30 -- --promo-capture | Out-Host
-.\tools\encode_promo.ps1
+& '.\godot.windows.editor.double.x86_64.exe\godot.windows.editor.double.x86_64.exe' --path game --script ../tools/capture_smoothing.gd --fixed-fps 30 -- --promo-capture | Out-Host
+.\tools\encode_promo.ps1 -IncludeSmoothing
 ~~~
 
-增加 --pilot 可先输出每秒一张的试拍图。完整帧在 media_work/frames_v3；动作记录在 media_work/actions.json。成片和封面输出到 media/IslandStack-Trailer.mp4、media/IslandStack-Cover.png。使用独立验证存档，不读取或覆盖玩家正式岛屿。字体只用于本地排版，不纳入源码与运行包。
+增加 --pilot 可先输出每秒一张的试拍图。主体帧在 media_work/frames_v3，平滑帧在 media_work/smooth_frames；动作记录在 media_work/actions.json。编码时在 34 秒插入平滑片段，后续音效同步后移 8 秒，加入平滑操作声，音乐与环境声贯穿完整 57 秒。成片和封面输出到 media/IslandStack-Trailer.mp4、media/IslandStack-Cover.png。使用独立验证存档，不读取或覆盖玩家正式岛屿。字体只用于本地排版，不纳入源码与运行包。
