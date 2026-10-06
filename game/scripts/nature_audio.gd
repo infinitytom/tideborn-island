@@ -4,7 +4,7 @@ var model
 var enabled_music: bool = true
 var music_volume: float = 0.65
 var ambience_volume: float = 0.70
-var effects_volume: float = 0.75
+var effects_volume: float = 0.55
 var music: AudioStreamPlayer
 var sea: AudioStreamPlayer
 var rain: AudioStreamPlayer
@@ -30,8 +30,8 @@ func setup(m):
 	rain = player("res://audio/rain.wav",true)
 	for name_text in ["click","earth","cut","smooth","water","seed"]:
 		clips[name_text] = load("res://audio/"+name_text+".wav") as AudioStreamWAV
-	for i in 6:
-		var p = AudioStreamPlayer.new(); p.max_polyphony = 2; add_child(p); effects.append(p)
+	for i in 2:
+		var p = AudioStreamPlayer.new(); p.max_polyphony = 1; add_child(p); effects.append(p)
 	refresh_volume()
 func level(v: float) -> float:
 	return linear_to_db(maxf(v,0.0001))
@@ -43,10 +43,10 @@ func _process(_dt):
 	if is_instance_valid(music): refresh_volume()
 func effect(name_text: String):
 	var now = Time.get_ticks_msec()
-	if name_text != "click" and now-last_effect < 110: return
+	if now-last_effect < (90 if name_text=="click" else 190): return
 	last_effect = now
 	var p = effects[effect_index % effects.size()]; effect_index += 1
 	p.stream = clips.get(name_text,clips.get("click"))
-	p.volume_db = level(effects_volume * 0.8)
-	p.pitch_scale = 1.0 if name_text=="click" else randf_range(0.94,1.06)
+	p.volume_db = level(effects_volume * 0.55)
+	p.pitch_scale = 1.0 if name_text=="click" else randf_range(0.96,1.02)
 	p.play()

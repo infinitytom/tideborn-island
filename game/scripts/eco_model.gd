@@ -9,6 +9,7 @@ const CONDITIONS = ["湿润、背阴的地表", "林下湿润的半阴环境", "
 const COLORS = [Color("577347"),Color("497d53"),Color("8b9c58"),Color("99a564"),Color("7d8f50"),Color("75a25e"),Color("e6d6a1"),Color("687c42"),Color("80a868"),Color("8dae72"),Color("567d4e"),Color("3c6851")]
 const BIOMES = ["岩岸", "草甸", "河岸湿地", "阔叶林", "山地针叶林"]
 var world_seed: int = 260104
+var terrain_layout: int = 0
 var ticks: int = 0
 var elapsed: float = 0
 var sun_angle: float = -0.6
@@ -59,8 +60,17 @@ func height_at(p: Vector2, use_base: bool = false) -> float:
 	var a = base_heights if use_base else heights
 	return lerpf(lerpf(a[x+z*N],a[x+1+z*N],gx-x),lerpf(a[x+(z+1)*N],a[x+1+(z+1)*N],gx-x),gz-z)
 
+func layout_parameters() -> Dictionary:
+	if terrain_layout==0 or world_seed==260104:
+		return {"angle":0.0,"stretch":Vector2.ONE,"center":Vector2.ZERO,"hills":Vector3.ONE,"lake":Vector2(-15,40),"phase":0.0,"bays":0.0}
+	return {"angle":hash01(0,71)*TAU,"stretch":Vector2(.78+hash01(0,72)*.55,.78+hash01(0,73)*.45),"center":Vector2(hash01(0,74)-.5,hash01(0,75)-.5)*70,"hills":Vector3(.65+hash01(0,76)*.8,.65+hash01(0,77)*.8,.65+hash01(0,78)*.8),"lake":Vector2(-45+hash01(0,79)*70,20+hash01(0,80)*60),"phase":hash01(0,81)*TAU,"bays":1.0}
+
+func layout_point(p:Vector2) -> Vector2:
+	var layout=layout_parameters()
+	return (p*layout.stretch).rotated(layout.angle)+layout.center
+
 func reset(s: int):
-	world_seed = s; ticks = 0; elapsed = 0
+	world_seed = s; terrain_layout=1; ticks = 0; elapsed = 0
 	vapor = 0.42; cloud_cover = 0.48; rainfall = 0; plankton = 0.4; fish_population = 0.3; weather_mode = 0
 	sun_angle = -0.6 + hash01(8)*0.3
 	for name in ["heights","water","moisture","light","temperature","slope","canopy","growth"]:
@@ -72,18 +82,22 @@ func reset(s: int):
 	springs = [{"x": -8.0,"z": -140.0}]; terrain_blocks = {}; animals = []
 	var noise = FastNoiseLite.new(); noise.seed = s; noise.frequency = 0.009; noise.fractal_octaves = 4
 	var forest_noise = FastNoiseLite.new(); forest_noise.seed = s+185; forest_noise.frequency = 0.018
+	var layout=layout_parameters()
+	var spring=layout_point(Vector2(-8,-140));springs=[{"x":spring.x,"z":spring.y}]
 	for i in COUNT:
-		var p = pos(i)
+		var world_p=pos(i)
+		var p = (world_p-layout.center).rotated(-layout.angle)/layout.stretch
 		var broad = noise.get_noise_2d(p.x,p.y)
 		var r = Vector2(p.x,p.y*1.10).length()
+		r/=1.0+layout.bays*(.16*sin(p.angle()*3+layout.phase)+.10*cos(p.angle()*5-layout.phase))
 		var coast = smoothstep(160+broad*55,290+broad*42,r)
-		var hills = 76*exp(-p.distance_squared_to(Vector2(-105,-85))/9000.0)+67*exp(-p.distance_squared_to(Vector2(115,55))/6500.0)+38*exp(-p.distance_squared_to(Vector2(80,-150))/5500.0)
+		var hills = 76*layout.hills.x*exp(-p.distance_squared_to(Vector2(-105,-85))/9000.0)+67*layout.hills.y*exp(-p.distance_squared_to(Vector2(115,55))/6500.0)+38*layout.hills.z*exp(-p.distance_squared_to(Vector2(80,-150))/5500.0)
 		var h = 19+broad*23+hills
-		var river_x = sin(p.y*0.018)*21+sin(p.y*0.03)*8
+		var river_x = sin(p.y*0.018+layout.phase)*21+sin(p.y*0.03)*8
 		var river_d = absf(p.x-river_x)
 		var river_level = 8.0-p.y*0.019
 		h = lerpf(h,river_level-2.0+pow(river_d/30.0,2)*6.0,exp(-pow(river_d/43,2)))
-		var lake = exp(-p.distance_squared_to(Vector2(-15,40))/2700.0)
+		var lake = exp(-p.distance_squared_to(layout.lake)/2700.0)
 		h = lerpf(h,4.0, lake*0.95)
 		heights[i] = lerpf(h,-28.0,coast)
 		water[i] = maxf(0, (river_level if river_d < 16 and absf(p.y)<175 else 7.3 if lake>0.26 else 0.0)-heights[i])
@@ -237,11 +251,13 @@ func paint_plants(p: Vector2, radius: float, kind: int):
 
 func snapshot(include_geometry: bool = true) -> Dictionary:
 	var d = {"version":2,"seed":world_seed,"ticks":ticks,"elapsed":elapsed,"sun_angle":sun_angle,"springs":springs.duplicate(true),"terrain_blocks":terrain_blocks.duplicate(true) if include_geometry else {},"vapor":vapor,"cloud_cover":cloud_cover,"rainfall":rainfall,"plankton":plankton,"fish_population":fish_population,"weather_mode":weather_mode,"creative":creative}
+	d.terrain_layout=terrain_layout
 	for key in ["heights","base_heights","water","moisture","light","temperature","habitat","slope","canopy","seeds","seed_set","species","growth","observations"]: d[key] = get(key).duplicate()
 	return d
 
 func restore(d: Dictionary):
 	creative = d.get("creative",false)
+	terrain_layout=d.get("terrain_layout",0)
 	world_seed = d.seed; ticks = d.ticks; elapsed = d.elapsed; sun_angle = d.sun_angle
 	for key in ["vapor","cloud_cover","rainfall","plankton","fish_population","weather_mode"]: set(key,d[key])
 	for key in ["heights","base_heights","water","moisture","light","temperature","habitat","slope","canopy","seeds","seed_set","species","growth","observations"]: set(key,d[key].duplicate())

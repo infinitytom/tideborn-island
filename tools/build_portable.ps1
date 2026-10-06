@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)][string]$EnginePath,
-    [string]$Version = "0.3.2"
+    [string]$Version = "0.3.3"
 )
 $ErrorActionPreference = "Stop"
 $taskProjectRoot = Split-Path $PSScriptRoot -Parent

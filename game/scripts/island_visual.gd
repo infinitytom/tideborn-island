@@ -4,6 +4,8 @@ var model
 var terrain: VoxelLodTerrain
 var camera: Camera3D
 var sun: DirectionalLight3D
+var moon: DirectionalLight3D
+var moon_disc: MeshInstance3D
 var environment: WorldEnvironment
 var ocean: MeshInstance3D
 var lake: MeshInstance3D
@@ -85,6 +87,16 @@ func setup(m):
 	sun.light_color = Color("ffeace"); sun.light_energy = 1.12
 	sun.shadow_enabled = true; sun.directional_shadow_max_distance = 850
 	add_child(sun)
+	moon = DirectionalLight3D.new(); moon.rotation_degrees=Vector3(-12,110,0)
+	moon.light_color=Color("bdd3eb"); moon.light_energy=0
+	moon.light_specular=.15
+	moon.sky_mode=DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	moon.shadow_enabled=true; moon.directional_shadow_max_distance=850
+	add_child(moon)
+	var moon_mat=material(Color("e5edf4")); moon_mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	moon_mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	moon_disc=piece(sphere(55),moon_mat,Vector3.ZERO)
+	moon_disc.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	camera = Camera3D.new(); camera.fov = 48; camera.near = 0.3; camera.far = 18000
 	add_child(camera); camera.current = true
 	var viewer = VoxelViewer.new(); viewer.view_distance = 2600; viewer.requires_collisions = false
@@ -119,9 +131,10 @@ func setup(m):
 	var cursor_mat = material(Color("ffef9c")); cursor_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	cursor = piece(make_ring(10,0.42),cursor_mat,Vector3.ZERO)
 	cursor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; cursor.visible = false
-	var brush_mat = StandardMaterial3D.new(); brush_mat.albedo_color = Color(0.92,0.95,0.85,0.13)
-	brush_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; brush_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	brush_ball = piece(sphere(1),brush_mat,Vector3.ZERO); brush_ball.visible = false
+	var brush_mat = ShaderMaterial.new();brush_mat.shader=load("res://shaders/brush_preview.gdshader")
+	var preview_mesh=sphere(1);preview_mesh.radial_segments=32;preview_mesh.rings=16
+	brush_ball = piece(preview_mesh,brush_mat,Vector3.ZERO); brush_ball.visible = false
+	brush_ball.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	make_atmosphere()
 	rebuild_terrain()
 	queue_render(model.render_frame)
@@ -170,22 +183,26 @@ func pick_plane(screen: Vector2, altitude: float) -> Vector3:
 	if absf(p.x)>490 or absf(p.z)>490: return Vector3(9999,9999,9999)
 	return p
 
+func brush_center(p:Vector3,radius:float,remove:bool,stamp:bool=false) -> Vector3:
+	if remove:return p-last_normal*radius*0.55
+	if not stamp and p.y<0.3:return Vector3(p.x,-radius*0.6,p.z)
+	return p
+
 func edit(p: Vector3, radius: float, tool_kind: int, remove: bool = false, strength: float = 1.0, stamp: bool = false) -> bool:
+	if tool_kind==2:radius=minf(radius,14)
 	if absf(p.x)+radius>504 or absf(p.z)+radius>504 or p.y+radius>TOP-8 or p.y-radius<BOTTOM+8: return false
-	var center = p
+	var center = p if tool_kind==2 else brush_center(p,radius,remove or tool_kind==1,stamp)
 	var tool = terrain.get_voxel_tool(); tool.channel = VoxelBuffer.CHANNEL_SDF
 	if tool_kind==0 and not remove:
 		if stamp:
 			tool.mode = VoxelTool.MODE_ADD; tool.sdf_strength = 1.0; tool.do_sphere(p,radius)
 		elif p.y<0.3:
-			center.y = -radius*0.6
 			tool.mode = VoxelTool.MODE_ADD; tool.sdf_strength = 1.0
 			tool.do_sphere(center,radius)
-		else: tool.grow_sphere(p,radius,0.8*strength)
+		else: tool.grow_sphere(p,radius,2.4*strength)
 	elif tool_kind==2:
 		tool.smooth_sphere(p,minf(radius,14),1)
 	else:
-		center = p-last_normal*radius*0.55
 		tool.mode = VoxelTool.MODE_REMOVE; tool.sdf_strength = 1
 		tool.do_sphere(center,radius)
 	var low = Vector3i((center-Vector3.ONE*(radius+3))/32.0)
@@ -236,11 +253,13 @@ func pan(delta: Vector2):
 	target_focus += (-right*delta.x+forward*delta.y)*target_distance*0.0014
 	target_focus.x = clampf(target_focus.x,-460,460); target_focus.z = clampf(target_focus.z,-460,460)
 
-func set_cursor(p: Vector3, radius: float, excavation: bool):
-	cursor.visible = p.x<9000 and not excavation; brush_ball.visible = p.x<9000 and excavation
+func set_cursor(p: Vector3, radius: float, excavation: bool, stamp:bool=false, terrain_preview:bool=true):
+	cursor.visible = p.x<9000 and not excavation; brush_ball.visible = p.x<9000 and terrain_preview
 	if p.x<9000:
 		cursor.position = p+Vector3.UP*0.15; cursor.scale = Vector3(radius/10,1,radius/10)
-		brush_ball.position = p-last_normal*radius*0.55; brush_ball.scale = Vector3.ONE*radius
+		brush_ball.position = brush_center(p,radius,excavation,stamp); brush_ball.scale = Vector3.ONE*radius
+		var valid=absf(p.x)+radius<=504 and absf(p.z)+radius<=504 and p.y+radius<=TOP-8 and p.y-radius>=BOTTOM+8
+		brush_ball.material_override.set_shader_parameter("tint",Color("f08b79") if excavation or not valid else Color("9debc0"))
 
 func queue_render(frame: Dictionary):
 	if frame.is_empty(): return
@@ -351,11 +370,16 @@ func update_atmosphere(dt: float):
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color("162a3c").lerp(Color("647e88"),daylight)
 	e.fog_light_color = sky_mat.sky_horizon_color
-	e.ambient_light_energy = lerpf(0.22,0.38,daylight)
+	e.ambient_light_energy = lerpf(0.48,0.38,daylight)
 	e.ambient_light_color = Color("8b9ebf").lerp(Color("b4cfcc"),daylight)
-	sun.light_energy = lerpf(0.12,1.12,daylight)
+	sun.light_energy = 1.12*daylight
+	moon.light_energy=0.65*(1.0-daylight)
+	moon.rotation_degrees.y=110.0+sin(cycle*TAU)*15.0
+	moon_disc.position=camera.global_position+moon.global_basis.z*5000.0
+	moon_disc.material_override.albedo_color=Color(0.90,0.94,1.0,1.0-daylight)
+	moon_disc.visible=daylight<0.95
 	sun.light_color = Color("bbc4e6").lerp(Color("fff0d7"),daylight).lerp(Color("ffb873"),dusk*0.7)
-	# Follow a smooth orbit for moving shadows, including the short moonlit night.
+	# Sun and moon blend continuously; moonlight keeps terrain readable at night.
 	var angle = -20.0-50.0*maxf(0,altitude)
 	sun.rotation_degrees.x = lerpf(sun.rotation_degrees.x,angle,1-exp(-dt*0.7))
 	sun.rotation_degrees.y = lerpf(sun.rotation_degrees.y,-65.0+cycle*100.0,1-exp(-dt*0.7))

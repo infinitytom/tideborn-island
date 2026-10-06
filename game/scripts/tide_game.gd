@@ -250,13 +250,14 @@ func build_ui():
 	var title = label("小岛叠叠乐",43,Color("244e45")); title.position = Vector2(78,178); home.add_child(title)
 	var english = label("I S L A N D   S T A C K",12,Color("68868a")); english.position = Vector2(82,242); home.add_child(english)
 	var subtitle = label("挖一挖，叠一叠。\n等森林和小动物来作伴。",18); subtitle.position = Vector2(82,273); home.add_child(subtitle)
-	var menus = VBoxContainer.new(); menus.position = Vector2(86,330); menus.size.x = 267; menus.add_theme_constant_override("separation",9); home.add_child(menus)
+	var menus = VBoxContainer.new(); menus.position = Vector2(86,330); menus.size.x = 267; menus.add_theme_constant_override("separation",6); home.add_child(menus)
 	var new_b = button("叠一座新岛",show_new_island); new_b.custom_minimum_size = Vector2(267,45); menus.add_child(new_b)
 	new_b.add_theme_color_override("font_color",Color("f8f8eb")); new_b.add_theme_color_override("font_hover_color",Color("ffffff")); new_b.add_theme_color_override("font_pressed_color",Color("ffffff"))
 	new_b.add_theme_stylebox_override("normal",style(Color("356757"),10,11)); new_b.add_theme_stylebox_override("hover",style(Color("447c67"),10,11)); new_b.add_theme_stylebox_override("pressed",style(Color("294e43"),10,11))
 	var continue_b = button("继续",continue_game); continue_b.name = "Continue"; continue_button=continue_b; continue_b.custom_minimum_size = Vector2(267,50); menus.add_child(continue_b)
+	menus.add_child(button("我的世界",show_records))
 	menus.add_child(button("全景欣赏",func(): set_panorama(true))); menus.add_child(button("认识这个世界",show_help)); menus.add_child(button("设置",show_settings)); menus.add_child(button("支持创作者",show_support)); menus.add_child(button("退出",exit_game))
-	var home_note = label("天空 · 陆地 · 海洋\n日照、云雨与生物群落，在这里慢慢循环。",13,Color("5d7d80")); home_note.position = Vector2(86,716); home.add_child(home_note)
+	var home_note = label("天空 · 陆地 · 海洋\n日照、云雨与生物群落，在这里慢慢循环。",13,Color("5d7d80")); home_note.position = Vector2(86,748); home.add_child(home_note)
 	hud = Control.new(); hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); hud.mouse_filter = Control.MOUSE_FILTER_IGNORE; ui.add_child(hud)
 	var menu_b = button("菜单",show_pause); menu_b.position = Vector2(26,24); menu_b.custom_minimum_size = Vector2(80,44); hud.add_child(menu_b)
 	season_label = label("",15); season_label.position = Vector2(1100,24); season_label.size = Vector2(300,48)
@@ -411,9 +412,7 @@ func show_new_island():
 	seed_edit.add_theme_font_override("font",font); seed_edit.custom_minimum_size.y = 45; content.add_child(seed_edit)
 	content.add_child(button("让小岛生长",func():
 		if not seed_edit.text.is_valid_int(): return
-		if started:
-			save_game()
-			records.append({"name":"上一座岛 · 种子 %d" % model.world_seed,"world":model.snapshot(),"camera":resume_camera if home_visible else camera_snapshot()})
+		archive_current_world()
 		var seed_value = absi(int(seed_edit.text))%1000000
 		world_revision += 1
 		model = Model.new(); model.reset(seed_value); visual.model = model; sound.model = model
@@ -506,21 +505,61 @@ func show_ecology():
 	var box = VBoxContainer.new(); scroll.add_child(box)
 	for k in 12: box.add_child(label("%s  ·  %s" % [model.SPECIES_NAMES[k],model.CONDITIONS[k]],14))
 
+func archive_current_world():
+	var world:Dictionary;var viewpoint:Dictionary
+	if started:
+		finish_simulation();update_surface();visual.capture_edits()
+		world=model.snapshot();viewpoint=resume_camera if home_visible and not resume_camera.is_empty() else camera_snapshot()
+	else:
+		var data=read_bundle()
+		if data.is_empty():return
+		records=data.get("records",[]).duplicate(true);world=data.world;viewpoint=data.get("camera",{})
+	records.append({"name":"小岛 %d · 种子 %d" % [records.size()+1,world.seed],"world":world,"camera":viewpoint})
+
+func persist_records():
+	if started:save_game();return
+	var data=read_bundle()
+	if data.is_empty():return
+	data.records=records;write_bundle(data)
+
+func open_record(index:int):
+	if index<0 or index>=records.size():return
+	var record=records[index].duplicate(true)
+	if not valid_world(record.get("world")):toast("这座岛的记录无法读取。");return
+	archive_current_world();records.remove_at(index)
+	world_revision+=1;model=Model.new();model.restore(record.world)
+	visual.model=model;sound.model=model;visual.rebuild_terrain()
+	model.prepare_render_frame();visual.queue_render(model.render_frame);visual.refresh_animals()
+	accumulator=0;pending_surface={};resume_camera={};enter_world()
+	restore_camera(record.get("camera",{}));save_game()
+
+func confirm_delete_record(index:int):
+	if index<0 or index>=records.size():return
+	open_popup("删除这座旧世界？",560)
+	var name_l=label(records[index].name,18);name_l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(name_l)
+	content.add_child(label("这条岛屿记录将从「我的世界」中移除。\n当前正在游玩的世界不会受影响。",15))
+	var row=HBoxContainer.new();content.add_child(row)
+	row.add_child(button("保留",show_records))
+	row.add_child(button("删除这座世界",func():records.remove_at(index);persist_records();show_records()))
+
 func show_records():
-	open_popup("岛屿记录",660)
-	content.add_child(button("记录此刻的岛屿",func():
-		visual.capture_edits()
-		records.append({"name":"岛屿 %d · 种子 %d" % [records.size()+1,model.world_seed],"world":model.snapshot(),"camera":camera_snapshot()})
-		save_game(); show_records()))
+	var current_seed=model.world_seed if started else -1
+	if not started:
+		var data=read_bundle()
+		records=data.get("records",[]).duplicate(true);current_seed=data.world.seed if not data.is_empty() else -1
+	open_popup("我的世界",660)
+	if current_seed>=0:
+		content.add_child(button("继续当前世界 · 种子 %d" % current_seed,continue_game))
+	if started:content.add_child(button("另存此刻的岛屿",func():archive_current_world();persist_records();show_records()))
+	content.add_child(label("新建或切换世界时，当前小岛会自动留在这里。",14))
 	var scroll = ScrollContainer.new(); scroll.custom_minimum_size.y = 260; content.add_child(scroll)
 	var box = VBoxContainer.new(); box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scroll.add_child(box)
-	if records.is_empty(): box.add_child(label("把满意的岛屿记下来，随时回来继续塑造。",15))
+	if records.is_empty(): box.add_child(label("还没有旧世界；叠一座新岛后，原来的小岛会保留。",15))
 	for i in records.size():
-		box.add_child(button(records[i].name+"   →",func():
-			world_revision += 1; model.restore(records[i].world)
-			visual.model = model; sound.model = model; visual.rebuild_terrain()
-			model.prepare_render_frame(); visual.queue_render(model.render_frame); visual.refresh_animals()
-			restore_camera(records[i].camera); close_popup(); save_game()))
+		var row=HBoxContainer.new();row.add_theme_constant_override("separation",8);box.add_child(row)
+		var name_l=label(records[i].name,15);name_l.custom_minimum_size.x=390;name_l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;row.add_child(name_l)
+		row.add_child(button("打开",func():open_record(i)))
+		row.add_child(button("删除",func():confirm_delete_record(i)))
 
 func toast(text_value: String, seconds: float = 4):
 	toast_label.text = text_value; toast_time = seconds; toast_label.modulate.a = 1
@@ -662,7 +701,7 @@ func _process(dt: float):
 	var blocked = get_viewport().gui_get_hovered_control()!=null
 	hover = Vector3(9999,9999,9999) if blocked else visual.pick(get_viewport().get_mouse_position())
 	if stamp_mode and selected_tool==0 and not blocked: hover=visual.pick_plane(get_viewport().get_mouse_position(),placement_height)
-	visual.set_cursor(hover,radius,selected_tool==1 or (stamp_mode and selected_tool==0))
+	visual.set_cursor(hover,minf(radius,14) if selected_tool==2 else radius,selected_tool==1 or (selected_tool==0 and drawing<0),stamp_mode and selected_tool==0,selected_tool<=2)
 	visual.set_source_focus(selected_tool==3,hover)
 	if drawing!=0 and not blocked:
 		brush_timer += dt
@@ -756,9 +795,12 @@ func read_bundle() -> Dictionary:
 func save_game():
 	if not started: return
 	update_surface(); visual.capture_edits()
+	write_bundle({"world":model.snapshot(),"records":records,"camera":resume_camera if home_visible and not resume_camera.is_empty() else camera_snapshot()})
+
+func write_bundle(data:Dictionary):
 	var f = FileAccess.open(save_path+".tmp",FileAccess.WRITE)
 	if f==null: toast("无法保存，请检查磁盘空间。"); return
-	f.store_var({"world":model.snapshot(),"records":records,"camera":resume_camera if home_visible and not resume_camera.is_empty() else camera_snapshot()}); f.flush(); f.close()
+	f.store_var(data); f.flush(); f.close()
 	if FileAccess.file_exists(save_path): DirAccess.copy_absolute(ProjectSettings.globalize_path(save_path),ProjectSettings.globalize_path(save_path+".bak"))
 	var error = DirAccess.rename_absolute(ProjectSettings.globalize_path(save_path+".tmp"),ProjectSettings.globalize_path(save_path))
 	available_save = error==OK
@@ -847,7 +889,8 @@ func frame_report(name_text: String) -> Dictionary:
 
 func shot(name_text: String):
 	if DisplayServer.get_name()=="headless": return
-	await RenderingServer.frame_post_draw
+	await get_tree().process_frame
+	RenderingServer.force_draw(false,1.0/60)
 	get_viewport().get_texture().get_image().save_png(screenshot_dir.path_join("潮生岛_"+name_text+".png"))
 
 func polish_test():

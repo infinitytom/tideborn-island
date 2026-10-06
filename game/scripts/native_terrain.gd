@@ -6,6 +6,9 @@ static func expression(fn: VoxelGraphFunction, code: String, names: PackedString
 	for i in sources.size(): fn.add_connection(sources[i],0,id,i)
 	return id
 
+static func shifted(axis:String,value:float) -> String:
+	return "%s%s%f" % [axis,"+" if value<0 else "-",absf(value)]
+
 static func create(model) -> VoxelGeneratorGraph:
 	var gen = VoxelGeneratorGraph.new(); var fn = gen.get_main_function()
 	var x = fn.create_node(VoxelGraphFunction.NODE_INPUT_X,Vector2.ZERO)
@@ -18,14 +21,17 @@ static func create(model) -> VoxelGeneratorGraph:
 	fn.set_node_param(image_node,0,image); fn.set_node_param(image_node,1,1)
 	fn.add_connection(px,0,image_node,0); fn.add_connection(pz,0,image_node,1)
 	var base = expression(fn,"max((y-h)*0.8,0-y-48)",["y","h"],[y,image_node])
-	var arch_h = model.height_at(Vector2(120,-65),true)+19
-	var ax = expression(fn,"x-120+sin(z*0.14)*1.1",["x","z"],[x,z])
-	var ay = expression(fn,"(y-%f)*1.1+sin(x*0.12)*1.4" % arch_h,["x","y"],[x,y])
-	var az = expression(fn,"z+65+sin(x*0.075)*2",["x","z"],[x,z])
+	var arch_p=model.layout_point(Vector2(120,-65))
+	var arch_h = model.height_at(arch_p,true)+19
+	var ax = expression(fn,"%s+sin(z*0.14)*1.1" % shifted("x",arch_p.x),["x","z"],[x,z])
+	var ay = expression(fn,"(%s)*1.1+sin(x*0.12)*1.4" % shifted("y",arch_h),["x","y"],[x,y])
+	var az = expression(fn,"%s+sin(x*0.075)*2" % shifted("z",arch_p.y),["x","z"],[x,z])
 	var arch = expression(fn,"sqrt((sqrt(a*a+b*b)-26)*(sqrt(a*a+b*b)-26)+c*c)-8+sin(a*0.16+c*0.09)*1.4",["a","b","c"],[ax,ay,az])
 	var land = expression(fn,"min(a,b)",["a","b"],[base,arch])
-	var cave_h = model.height_at(Vector2(-100,-65),true)-12
-	var cave = expression(fn,"max(sqrt((x+100)*(x+100)+(y-%f)*(y-%f))-13,abs(z+65)-52)" % [cave_h,cave_h],["x","y","z"],[x,y,z])
+	var cave_p=model.layout_point(Vector2(-100,-65))
+	var cave_h = model.height_at(cave_p,true)-12
+	var cx=shifted("x",cave_p.x);var cy=shifted("y",cave_h);var cz=shifted("z",cave_p.y)
+	var cave = expression(fn,"max(sqrt((%s)*(%s)+(%s)*(%s))-13,abs(%s)-52)" % [cx,cx,cy,cy,cz],["x","y","z"],[x,y,z])
 	var sdf = expression(fn,"max(a,0-b)",["a","b"],[land,cave])
 	var output = fn.create_node(VoxelGraphFunction.NODE_OUTPUT_SDF,Vector2.ZERO)
 	fn.add_connection(sdf,0,output,0)
